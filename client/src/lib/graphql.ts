@@ -37,6 +37,49 @@ export const GET_PROBLEM_STATUS = gql`
   }
 `;
 
+// Query to check a specific user's submissions for a problem
+export const GET_USER_PROBLEM_STATUS = gql`
+  query userProblemStatus($username: String!, $titleSlug: String!) {
+    matchedUser(username: $username) {
+      username
+      submitStats {
+        acSubmissionNum {
+          difficulty
+          count
+        }
+      }
+      submissionCalendar
+      submitStats {
+        totalSubmissionNum {
+          difficulty
+          count
+        }
+      }
+    }
+    question(titleSlug: $titleSlug) {
+      questionId
+      title
+      titleSlug
+      difficulty
+      status
+    }
+  }
+`;
+
+// Query to get recent submissions for a user
+export const GET_RECENT_SUBMISSIONS = gql`
+  query recentSubmissions($username: String!, $limit: Int!) {
+    recentSubmissionList(username: $username, limit: $limit) {
+      id
+      title
+      titleSlug
+      timestamp
+      statusDisplay
+      lang
+    }
+  }
+`;
+
 // Function to fetch a user's LeetCode submissions
 export async function fetchUserSubmissions(username: string) {
   try {
@@ -54,30 +97,65 @@ export async function fetchUserSubmissions(username: string) {
 // Function to check if a user has solved a specific problem
 export async function checkProblemStatus(username: string, titleSlug: string) {
   try {
-    // First get problem details
-    const { data: problemData } = await leetcodeClient.query({
-      query: GET_PROBLEM_STATUS,
-      variables: { titleSlug },
+    if (!username || !titleSlug) {
+      throw new Error("Username and problem titleSlug are required");
+    }
+    
+    // Get combined user and problem data
+    const { data } = await leetcodeClient.query({
+      query: GET_USER_PROBLEM_STATUS,
+      variables: { username, titleSlug },
     });
-    
-    // Then check the user's submission status
-    const { data: userData } = await leetcodeClient.query({
-      query: GET_USER_PROFILE,
-      variables: { username },
+
+    // Get recent submissions to check if this problem has been solved
+    const { data: recentData } = await leetcodeClient.query({
+      query: GET_RECENT_SUBMISSIONS,
+      variables: { username, limit: 20 },
     });
-    
-    // Check submissions for this problem
-    // Note: This is a simplified approach as the actual implementation
-    // would require querying user's submissions for the specific problem
-    
+
+    // Check if the problem appears in recent accepted submissions
+    const recentSubmissions = recentData.recentSubmissionList || [];
+    const problemSolved = recentSubmissions.some(
+      (submission: any) => submission.titleSlug === titleSlug && submission.statusDisplay === "Accepted"
+    );
+
     return {
-      problem: problemData.question,
-      user: userData.matchedUser,
-      // Return a best guess based on available data
-      solved: userData.matchedUser.submitStats.acSubmissionNum.submissions > 0
+      problem: data.question,
+      user: data.matchedUser,
+      solved: problemSolved,
+      recentSubmissions: recentSubmissions
     };
   } catch (error) {
     console.error('Error checking problem status:', error);
     throw error;
+  }
+}
+
+// Function to verify LeetCode task completion
+export async function verifyLeetCodeCompletion(username: string, problemTitleSlug: string) {
+  try {
+    if (!username || !problemTitleSlug) {
+      return { verified: false, error: "Missing username or problem identifier" };
+    }
+    
+    const result = await checkProblemStatus(username, problemTitleSlug);
+    
+    return {
+      verified: result.solved,
+      problem: result.problem,
+      user: {
+        username: result.user?.username,
+        // Include any other needed user data
+      },
+      submissions: result.recentSubmissions?.filter(
+        (s: any) => s.titleSlug === problemTitleSlug
+      )
+    };
+  } catch (error: any) {
+    console.error("Error verifying LeetCode completion:", error);
+    return { 
+      verified: false, 
+      error: error.message || "Failed to verify completion" 
+    };
   }
 }
