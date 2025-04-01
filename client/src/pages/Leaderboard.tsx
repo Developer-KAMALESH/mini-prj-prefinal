@@ -7,8 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/use-auth";
-import { collection, query, where, getDocs, orderBy, limit, doc, getDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,81 +17,29 @@ export default function Leaderboard() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const { toast } = useToast();
   const [, navigate] = useLocation();
-  const { user } = useAuth();
   const [groups, setGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  const [loadingLeaderboard, setLoadingLeaderboard] = useState(true);
   const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
-  const [timeframe, setTimeframe] = useState("all"); // all, monthly, weekly
-  
-  // Fetch user's groups
+  const [timeframe, setTimeframe] = useState("all");
+
+  // Fetch all groups
   useEffect(() => {
-    if (!user) return;
-    
     const fetchGroups = async () => {
       try {
         setLoading(true);
-        console.log("Fetching groups for user:", user.id);
         
-        // Get all groups where user is a member
-        const groupMembersRef = collection(db, "group_members");
-        const q = query(groupMembersRef, where("userId", "==", user.id));
-        const querySnapshot = await getDocs(q);
+        const groupsRef = collection(db, "groups");
+        const groupsSnapshot = await getDocs(groupsRef);
         
-        console.log(`Found ${querySnapshot.size} group memberships`);
+        const groupsData = groupsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
         
-        // Extract group IDs from the memberships
-        const userGroupIds = querySnapshot.docs.map(docSnapshot => {
-          const data = docSnapshot.data();
-          console.log("Group member data:", data);
-          return data.groupId;
-        });
-        
-        if (userGroupIds.length === 0) {
-          console.log("User is not a member of any groups");
-          setGroups([]);
-          setLoading(false);
-          return;
-        }
-        
-        console.log("User's group IDs:", userGroupIds);
-        
-        // Fetch each group document by ID
-        const groupsData: any[] = [];
-        
-        for (const groupId of userGroupIds) {
-          try {
-            console.log(`Fetching group with ID: ${groupId}`);
-            
-            // Get the group document by ID
-            const groupDocRef = doc(db, "groups", groupId);
-            const groupDoc = await getDoc(groupDocRef);
-            
-            if (groupDoc.exists()) {
-              const groupData = groupDoc.data();
-              console.log("Retrieved group data:", { id: groupId, ...groupData });
-              
-              groupsData.push({
-                id: groupId, // Use the document ID
-                name: groupData.name,
-                description: groupData.description,
-                createdAt: groupData.createdAt,
-                creatorId: groupData.creatorId
-              });
-            } else {
-              console.log(`Group document with ID ${groupId} does not exist`);
-            }
-          } catch (err) {
-            console.error(`Error fetching group with ID ${groupId}:`, err);
-          }
-        }
-        
-        console.log(`Successfully retrieved ${groupsData.length} groups`);
         setGroups(groupsData);
         
-        // Auto-select first group if available
         if (groupsData.length > 0 && !selectedGroupId) {
-          console.log(`Auto-selecting first group: ${groupsData[0].id}`);
           setSelectedGroupId(groupsData[0].id);
           fetchLeaderboardData(groupsData[0].id, timeframe);
         }
@@ -110,21 +57,19 @@ export default function Leaderboard() {
     };
     
     fetchGroups();
-  }, [user, toast, timeframe]);
-  
-  // Fetch leaderboard data when group is selected
+  }, [timeframe]);
+
   const fetchLeaderboardData = async (groupId: string, timeframeFilter: string) => {
     if (!groupId) return;
     
     try {
       setLoadingLeaderboard(true);
       
-      // Get all task submissions for the group
       const tasksRef = collection(db, "tasks");
       const taskQuery = query(tasksRef, where("groupId", "==", groupId));
       const taskSnapshot = await getDocs(taskQuery);
       
-      const taskIds = taskSnapshot.docs.map(doc => doc.id); // Use document ID directly
+      const taskIds = taskSnapshot.docs.map(doc => doc.id);
       
       if (taskIds.length === 0) {
         setLeaderboardData([]);
@@ -132,7 +77,6 @@ export default function Leaderboard() {
         return;
       }
       
-      // Get submissions for those tasks
       const submissionsRef = collection(db, "task_submissions");
       let submissionsQuery;
       
@@ -140,12 +84,11 @@ export default function Leaderboard() {
       let startDate = new Date();
       
       if (timeframeFilter === "weekly") {
-        startDate.setDate(now.getDate() - 7); // Last 7 days
+        startDate.setDate(now.getDate() - 7);
       } else if (timeframeFilter === "monthly") {
-        startDate.setMonth(now.getMonth() - 1); // Last month
+        startDate.setMonth(now.getMonth() - 1);
       } else {
-        // All time, no date filtering
-        startDate = new Date(0); // Beginning of time
+        startDate = new Date(0);
       }
       
       if (timeframeFilter === "all") {
@@ -163,10 +106,7 @@ export default function Leaderboard() {
       
       const submissionsSnapshot = await getDocs(submissionsQuery);
       
-      // Calculate scores by user
       const userScores: Record<string, { score: number; user: any }> = {};
-      
-      // Get all users to avoid multiple queries
       const usersRef = collection(db, "users");
       const usersSnapshot = await getDocs(usersRef);
       const usersMap = new Map();
@@ -176,14 +116,12 @@ export default function Leaderboard() {
         usersMap.set(userData.id.toString(), userData);
       });
       
-      // Process submissions
       for (const doc of submissionsSnapshot.docs) {
         const submission = doc.data();
         const userId = submission.userId.toString();
-        const taskScore = submission.score || 10; // Default score if not specified
+        const taskScore = submission.score || 10;
         
         if (!userScores[userId]) {
-          // Get user data
           const user = usersMap.get(userId);
           
           if (user) {
@@ -203,9 +141,7 @@ export default function Leaderboard() {
         }
       }
       
-      // Convert to array and sort by score
       const leaderboard = Object.values(userScores).sort((a, b) => b.score - a.score);
-      
       setLeaderboardData(leaderboard);
     } catch (error) {
       console.error("Error fetching leaderboard:", error);
@@ -219,13 +155,11 @@ export default function Leaderboard() {
     }
   };
   
-  // Handle group selection change
   const handleGroupChange = (groupId: string) => {
     setSelectedGroupId(groupId);
     fetchLeaderboardData(groupId, timeframe);
   };
   
-  // Handle timeframe change
   const handleTimeframeChange = (selectedTimeframe: string) => {
     setTimeframe(selectedTimeframe);
     if (selectedGroupId) {
@@ -233,34 +167,12 @@ export default function Leaderboard() {
     }
   };
   
-  if (!user) {
-    return (
-      <div className="h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">StudySync</h1>
-          <p className="mb-4">Please log in to view the leaderboard</p>
-          <Button onClick={() => navigate('/auth')}>
-            Go to Login
-          </Button>
-        </div>
-      </div>
-    );
-  }
-  
   return (
     <div className="min-h-screen bg-neutral-light">
       <div className="flex h-screen overflow-hidden">
-        {/* Sidebar (Desktop) */}
-        <Sidebar 
-          userName={user.name} 
-          userEmail={user.email} 
-          userAvatar={user.avatar} 
-          activeItem="leaderboard" 
-        />
+        <Sidebar activeItem="leaderboard" />
         
-        {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Top Header */}
           <header className="bg-white border-b border-gray-200 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
@@ -269,7 +181,6 @@ export default function Leaderboard() {
             </div>
           </header>
           
-          {/* Leaderboard Content */}
           <main className="flex-1 overflow-y-auto p-4 bg-neutral-light">
             <div className="max-w-4xl mx-auto">
               <Card className="mb-6">
@@ -280,7 +191,6 @@ export default function Leaderboard() {
                       Group Leaderboard
                     </CardTitle>
                     
-                    {/* Timeframe filter */}
                     <Tabs 
                       value={timeframe} 
                       onValueChange={handleTimeframeChange}
@@ -332,9 +242,7 @@ export default function Leaderboard() {
                       </div>
                     ) : leaderboardData.length > 0 ? (
                       <div>
-                        {/* Top 3 Users - Visual Display */}
                         <div className="flex flex-col items-center justify-center md:flex-row md:justify-around mb-8 mt-2">
-                          {/* 2nd Place */}
                           {leaderboardData.length > 1 && (
                             <div className="flex flex-col items-center order-1 md:order-0 mt-4 md:mt-8">
                               <div className="relative">
@@ -352,7 +260,6 @@ export default function Leaderboard() {
                             </div>
                           )}
                           
-                          {/* 1st Place */}
                           {leaderboardData.length > 0 && (
                             <div className="flex flex-col items-center order-0 md:order-1">
                               <div className="relative">
@@ -370,7 +277,6 @@ export default function Leaderboard() {
                             </div>
                           )}
                           
-                          {/* 3rd Place */}
                           {leaderboardData.length > 2 && (
                             <div className="flex flex-col items-center order-2 mt-4 md:mt-10">
                               <div className="relative">
@@ -389,7 +295,6 @@ export default function Leaderboard() {
                           )}
                         </div>
                         
-                        {/* Complete Leaderboard Table */}
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -400,10 +305,7 @@ export default function Leaderboard() {
                           </TableHeader>
                           <TableBody>
                             {leaderboardData.map((item: any, index: number) => (
-                              <TableRow 
-                                key={item.user.id} 
-                                className={item.user.id === user.id ? "bg-primary/5 font-medium" : ""}
-                              >
+                              <TableRow key={item.user.id}>
                                 <TableCell className="font-medium">
                                   {index === 0 && (
                                     <span className="inline-flex items-center justify-center w-6 h-6 bg-yellow-400 text-white rounded-full">
@@ -433,10 +335,7 @@ export default function Leaderboard() {
                                     className="h-8 w-8 rounded-full mr-2" 
                                   />
                                   <div>
-                                    <div className="font-medium">
-                                      {item.user.name} 
-                                      {item.user.id === user.id && <span className="ml-2 text-primary text-xs">(You)</span>}
-                                    </div>
+                                    <div className="font-medium">{item.user.name}</div>
                                     <div className="text-xs text-gray-500">@{item.user.username}</div>
                                   </div>
                                 </TableCell>
@@ -448,7 +347,7 @@ export default function Leaderboard() {
                       </div>
                     ) : (
                       <div className="text-center py-8 text-gray-500">
-                        <p>No scores recorded yet. Complete tasks to appear on the leaderboard!</p>
+                        <p>No scores recorded yet for this group.</p>
                       </div>
                     )
                   ) : (
@@ -463,7 +362,6 @@ export default function Leaderboard() {
         </div>
       </div>
 
-      {/* Mobile Navigation */}
       <MobileNav activeItem="leaderboard" />
     </div>
   );

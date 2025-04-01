@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase/app";
+import { initializeAuth, browserLocalPersistence } from "firebase/auth";
 import { 
   getAuth, 
   GoogleAuthProvider, 
@@ -23,18 +24,23 @@ import {
 
 // Firebase configuration using environment variables
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  authDomain: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`,
-  storageBucket: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.appspot.com`,
+  apiKey: "AIzaSyBqc0HLQyhUP3eY7AnqKUeP1YzLLxt_swo",
+  authDomain: "temp-web-app-a1960.firebaseapp.com",
+  projectId: "temp-web-app-a1960",
+  storageBucket: "temp-web-app-a1960.firebasestorage.app",
+  messagingSenderId: "262651119703",
+  appId: "1:262651119703:web:34a8323cf75cf8e876fb12",
+  measurementId: "G-RE97H9X2RK"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase services
-export const auth = getAuth(app);
+export const auth = initializeAuth(app, {
+  persistence: browserLocalPersistence
+});
+
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
@@ -183,3 +189,4 @@ export const convertFirebaseUser = (firebaseUser: User) => {
     avatar: firebaseUser.photoURL || undefined
   };
 };
+
