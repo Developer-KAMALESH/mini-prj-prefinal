@@ -168,10 +168,14 @@ export default function TaskDetails() {
     }
 
     try {
-      setLeetCodeVerification({ status: "checking", message: "Checking submission status..." });
+      setLeetCodeVerification({ status: "checking", message: "Checking LeetCode submission status..." });
 
       // Extract LeetCode problem slug from the resource link
       const resourceLink = task.resourceLink || "";
+      // Different format possibilities:
+      // https://leetcode.com/problems/two-sum/
+      // https://leetcode.com/problems/two-sum/description/
+      // https://leetcode.com/problems/two-sum/submissions/
       const problemSlug = resourceLink.split("/problems/")[1]?.split("/")[0];
 
       if (!problemSlug) {
@@ -182,24 +186,39 @@ export default function TaskDetails() {
         return;
       }
 
-      // Verify the submission
+      console.log(`Verifying LeetCode submission for user ${userProfile.leetCodeUsername} and problem ${problemSlug}`);
+
+      // Verify the submission with improved LeetCode verification system
       const result = await verifyLeetCodeCompletion(userProfile.leetCodeUsername, problemSlug);
 
+      console.log("LeetCode verification result:", result);
+
       if (result && result.verified) {
+        // Success! Problem is solved
         setLeetCodeVerification({
           status: "success",
-          message: "Your LeetCode submission is verified! Click submit to record your completion.",
+          message: `Verified! You've completed "${result.problem?.title}" on LeetCode. Click submit to record your completion.`,
         });
 
-        // Auto-fill the submission form with the LeetCode problem link
+        // Auto-fill the submission form with the LeetCode problem link and a success comment
         setSubmissionForm((prev) => ({
           ...prev,
           submissionLink: task.resourceLink,
+          comments: `Successfully solved "${result.problem?.title}" (${result.problem?.difficulty} difficulty) on LeetCode.`,
         }));
       } else {
+        // Failed verification
+        let errorMessage = "Could not verify LeetCode submission. Try solving the problem first.";
+        
+        if (result && result.error) {
+          errorMessage = result.error;
+        } else if (result && result.problem) {
+          errorMessage = `Could not verify completion of "${result.problem?.title}". Make sure you've solved this problem recently on LeetCode.`;
+        }
+        
         setLeetCodeVerification({
           status: "error",
-          message: (result && result.error) || "Could not verify LeetCode submission. Try solving the problem first.",
+          message: errorMessage,
         });
       }
     } catch (err: any) {

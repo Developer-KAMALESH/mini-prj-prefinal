@@ -10,14 +10,15 @@ import {
   CheckSquare, 
   Trophy, 
   LogOut, 
-  Settings 
+  Settings,
+  BookOpen
 } from "lucide-react";
 
 interface SidebarProps {
   userName: string;
   userEmail: string;
   userAvatar?: string | null;
-  activeItem: "dashboard" | "chat" | "tasks" | "leaderboard" | "settings";
+  activeItem: "dashboard" | "chat" | "tasks" | "leaderboard" | "flashcards" | "settings";
 }
 
 export function Sidebar({ userName, userEmail, userAvatar, activeItem }: SidebarProps) {
@@ -48,7 +49,7 @@ export function Sidebar({ userName, userEmail, userAvatar, activeItem }: Sidebar
       <div className="p-4 border-b border-gray-200">
         <Link href="/dashboard">
           <div className="flex items-center cursor-pointer">
-            <h1 className="text-xl font-bold text-primary">StudyConnect</h1>
+            <h1 className="text-xl font-bold text-primary">StudySync</h1>
           </div>
         </Link>
       </div>
@@ -118,6 +119,18 @@ export function Sidebar({ userName, userEmail, userAvatar, activeItem }: Sidebar
               }`}>
                 <Trophy className="mr-3 h-5 w-5" />
                 Leaderboard
+              </div>
+            </Link>
+          </li>
+          <li>
+            <Link href="/flashcards">
+              <div className={`flex items-center px-3 py-2 rounded-md cursor-pointer ${
+                activeItem === "flashcards" 
+                ? "bg-primary-light text-primary font-medium" 
+                : "text-gray-700 hover:text-primary hover:bg-primary-lighter"
+              }`}>
+                <BookOpen className="mr-3 h-5 w-5" />
+                Flashcards
               </div>
             </Link>
           </li>

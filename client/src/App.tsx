@@ -14,6 +14,7 @@ import Tasks from "@/pages/Tasks";
 import TaskDetails from "@/pages/TaskDetails";
 import Leaderboard from "@/pages/Leaderboard";
 import Profile from "@/pages/Profile";
+import Flashcards from "@/pages/Flashcards";
 
 export type AppUser = {
   id: string;
@@ -57,6 +58,7 @@ function Router() {
       <Route path="/tasks" component={Tasks} />
       <Route path="/task/:taskId" component={TaskDetails} />
       <Route path="/leaderboard" component={Leaderboard} />
+      <Route path="/flashcards" component={Flashcards} />
       <Route path="/profile" component={Profile} />
       <Route component={NotFound} />
     </Switch>

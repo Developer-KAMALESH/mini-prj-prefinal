@@ -232,7 +232,7 @@ export default function Dashboard() {
     return (
       <div className="h-screen flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">StudyConnect</h1>
+          <h1 className="text-2xl font-bold mb-4">StudySync</h1>
           <p className="mb-4">Please log in to access the dashboard</p>
           <Button onClick={() => navigate('/auth')}>
             Go to Login
@@ -266,7 +266,7 @@ export default function Dashboard() {
                 >
                   <i className="ri-menu-line text-2xl"></i>
                 </button>
-                <h1 className="text-xl font-semibold text-neutral-dark md:hidden">StudyConnect</h1>
+                <h1 className="text-xl font-semibold text-neutral-dark md:hidden">StudySync</h1>
                 <h1 className="text-xl font-semibold text-neutral-dark hidden md:block">Dashboard</h1>
               </div>
               <div className="flex items-center space-x-4">

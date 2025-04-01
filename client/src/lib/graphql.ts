@@ -11,6 +11,8 @@ export const GET_USER_PROFILE = gql`
   query getUserProfile($username: String!) {
     matchedUser(username: $username) {
       username
+      githubUrl
+      twitterUrl
       submitStats: submitStatsGlobal {
         acSubmissionNum {
           difficulty
@@ -42,19 +44,14 @@ export const GET_USER_PROBLEM_STATUS = gql`
   query userProblemStatus($username: String!, $titleSlug: String!) {
     matchedUser(username: $username) {
       username
-      submitStats {
+      submitStats: submitStatsGlobal {
         acSubmissionNum {
           difficulty
           count
+          submissions
         }
       }
       submissionCalendar
-      submitStats {
-        totalSubmissionNum {
-          difficulty
-          count
-        }
-      }
     }
     question(titleSlug: $titleSlug) {
       questionId
@@ -62,6 +59,8 @@ export const GET_USER_PROBLEM_STATUS = gql`
       titleSlug
       difficulty
       status
+      translatedTitle
+      isPaidOnly
     }
   }
 `;
@@ -101,6 +100,8 @@ export async function checkProblemStatus(username: string, titleSlug: string) {
       throw new Error("Username and problem titleSlug are required");
     }
     
+    console.log(`Checking LeetCode problem status for user ${username} and problem ${titleSlug}`);
+    
     // Get combined user and problem data - this fetches the problem status
     const { data } = await leetcodeClient.query({
       query: GET_USER_PROBLEM_STATUS,
@@ -115,29 +116,61 @@ export async function checkProblemStatus(username: string, titleSlug: string) {
       fetchPolicy: 'network-only', // Don't use cache for verification
     });
 
+    // Check if the problem exists in LeetCode
+    if (!data.question) {
+      console.error(`Problem with titleSlug "${titleSlug}" not found on LeetCode`);
+      return {
+        problem: null,
+        user: data.matchedUser,
+        solved: false,
+        error: `Problem "${titleSlug}" not found on LeetCode`,
+        recentSubmissions: []
+      };
+    }
+
     // Check if problem status from LeetCode indicates it's solved
+    // LeetCode statuses: null (not attempted), "ac" (accepted/solved), 
+    // "notac" (attempted but not solved)
     const problemStatus = data.question?.status;
     console.log("LeetCode problem status:", problemStatus);
     
     // Check if the problem appears in recent accepted submissions
     const recentSubmissions = recentData.recentSubmissionList || [];
-    console.log("Recent submissions:", recentSubmissions.length);
+    console.log("Recent submissions count:", recentSubmissions.length);
     
-    // Strict checking: problem must be in "ac" (accepted) status AND appear in recent submissions
-    const problemSolved = problemStatus === "ac" && 
-      recentSubmissions.some(
-        (submission: any) => 
-          submission.titleSlug === titleSlug && 
-          submission.statusDisplay === "Accepted"
-      );
+    // Find submissions for this specific problem
+    const relevantSubmissions = recentSubmissions.filter(
+      (submission: any) => submission.titleSlug === titleSlug
+    );
+    
+    console.log(`Found ${relevantSubmissions.length} submissions for this problem`);
+    
+    // At least one "Accepted" submission is needed
+    const hasAcceptedSubmission = relevantSubmissions.some(
+      (submission: any) => submission.statusDisplay === "Accepted"
+    );
+    
+    // NEW APPROACH: 
+    // 1. If problem status is "ac" = user has solved it at some point
+    // 2. If there's a recent "Accepted" submission, user has solved it recently
+    
+    // For task verification in StudySync, we'll consider problem solved if:
+    // - Problem status is "ac" (user has solved it in the past) AND
+    // - There's a recent "Accepted" submission (within last 20 submissions)
+    const problemSolved = (
+      problemStatus === "ac" && 
+      hasAcceptedSubmission
+    );
 
-    console.log("Problem solved:", problemSolved);
+    console.log("Problem solved status:", problemSolved);
+    console.log("Problem has 'ac' status:", problemStatus === "ac");
+    console.log("Has recent accepted submission:", hasAcceptedSubmission);
 
     return {
       problem: data.question,
       user: data.matchedUser,
       solved: problemSolved,
-      recentSubmissions: recentSubmissions
+      recentSubmissions: relevantSubmissions
     };
   } catch (error) {
     console.error('Error checking problem status:', error);
@@ -149,22 +182,53 @@ export async function checkProblemStatus(username: string, titleSlug: string) {
 export async function verifyLeetCodeCompletion(username: string, problemTitleSlug: string) {
   try {
     if (!username || !problemTitleSlug) {
-      return { verified: false, error: "Missing username or problem identifier" };
+      return { 
+        verified: false, 
+        error: "Missing username or problem identifier" 
+      };
     }
+    
+    console.log(`Verifying LeetCode completion for user ${username} and problem ${problemTitleSlug}`);
     
     const result = await checkProblemStatus(username, problemTitleSlug);
     
-    return {
+    // If result has an error field, there was a problem with verification
+    if ('error' in result) {
+      return { 
+        verified: false, 
+        error: result.error,
+        problem: null
+      };
+    }
+    
+    // Format the response data
+    const verificationResult = {
       verified: result.solved,
-      problem: result.problem,
-      user: {
-        username: result.user?.username,
-        // Include any other needed user data
+      problem: {
+        id: result.problem?.questionId,
+        title: result.problem?.title,
+        titleSlug: result.problem?.titleSlug,
+        difficulty: result.problem?.difficulty,
+        isPaidOnly: result.problem?.isPaidOnly
       },
-      submissions: result.recentSubmissions?.filter(
-        (s: any) => s.titleSlug === problemTitleSlug
-      )
+      user: {
+        username: result.user?.username
+      },
+      // Include only the successful submissions
+      submissions: result.recentSubmissions
+        ?.filter((s: any) => s.statusDisplay === "Accepted")
+        .map((s: any) => ({
+          id: s.id,
+          title: s.title,
+          timestamp: s.timestamp,
+          language: s.lang
+        }))
     };
+    
+    console.log("LeetCode verification result:", 
+      verificationResult.verified ? "VERIFIED ✓" : "NOT VERIFIED ✗");
+    
+    return verificationResult;
   } catch (error: any) {
     console.error("Error verifying LeetCode completion:", error);
     return { 

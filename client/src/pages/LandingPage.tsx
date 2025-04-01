@@ -67,7 +67,7 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 py-6 flex justify-between items-center">
           <div className="flex items-center">
             <i className="ri-group-line text-primary text-3xl mr-2"></i>
-            <h1 className="text-xl md:text-2xl font-semibold text-neutral-dark">StudyConnect</h1>
+            <h1 className="text-xl md:text-2xl font-semibold text-neutral-dark">StudySync</h1>
           </div>
           <nav className="hidden md:flex space-x-8">
             <a href="#features" className="text-neutral-dark hover:text-primary">Features</a>
@@ -132,7 +132,7 @@ export default function LandingPage() {
           <div className="max-w-3xl mx-auto text-center">
             <h2 className="text-3xl font-bold mb-6">About the Project</h2>
             <p className="text-lg mb-8 text-neutral-dark/80">
-              StudyConnect is a student community platform designed to enhance collaborative learning experiences. Our platform enables students to create and join groups, engage in real-time discussions, manage tasks, and track progress through leaderboards.
+              StudySync is a student community platform designed to enhance collaborative learning experiences. Our platform enables students to create and join groups, engage in real-time discussions, manage tasks, and track progress through leaderboards.
             </p>
             <p className="text-lg mb-8 text-neutral-dark/80">
               The platform was developed as part of a student-led initiative to improve peer-to-peer learning and collaboration in academic environments. The intuitive interface, inspired by popular communication tools, ensures a familiar and productive experience.
@@ -171,7 +171,7 @@ export default function LandingPage() {
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="flex items-center mb-4 md:mb-0">
               <i className="ri-group-line text-white text-2xl mr-2"></i>
-              <h2 className="text-xl font-semibold">StudyConnect</h2>
+              <h2 className="text-xl font-semibold">StudySync</h2>
             </div>
             <div className="flex flex-col md:flex-row md:space-x-8 items-center">
               <a href="#" className="hover:text-primary-light mb-2 md:mb-0">Privacy Policy</a>
@@ -180,7 +180,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="mt-6 text-center text-white/70">
-            <p>&copy; {new Date().getFullYear()} StudyConnect. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} StudySync. All rights reserved.</p>
           </div>
         </div>
       </footer>

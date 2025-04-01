@@ -4,11 +4,12 @@ import {
   MessageSquare, 
   CheckSquare, 
   Trophy, 
-  Settings 
+  Settings,
+  BookOpen
 } from "lucide-react";
 
 interface MobileNavProps {
-  activeItem: "dashboard" | "chat" | "tasks" | "leaderboard" | "settings";
+  activeItem: "dashboard" | "chat" | "tasks" | "leaderboard" | "flashcards" | "settings";
 }
 
 export function MobileNav({ activeItem }: MobileNavProps) {
@@ -55,6 +56,17 @@ export function MobileNav({ activeItem }: MobileNavProps) {
             />
             <span className={`text-xs mt-1 ${activeItem === "leaderboard" ? "text-primary font-medium" : "text-gray-600"}`}>
               Leaderboard
+            </span>
+          </div>
+        </Link>
+        
+        <Link href="/flashcards">
+          <div className="flex flex-col items-center py-2 px-3 cursor-pointer">
+            <BookOpen 
+              className={`h-6 w-6 ${activeItem === "flashcards" ? "text-primary" : "text-gray-600"}`} 
+            />
+            <span className={`text-xs mt-1 ${activeItem === "flashcards" ? "text-primary font-medium" : "text-gray-600"}`}>
+              Flashcards
             </span>
           </div>
         </Link>

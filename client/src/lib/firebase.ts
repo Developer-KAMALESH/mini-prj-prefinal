@@ -34,9 +34,7 @@ export const googleProvider = new GoogleAuthProvider();
 // Authentication helper functions
 export const signInWithGoogle = async () => {
   try {
-    // Try redirect method first (more reliable for mobile)
-    await signInWithRedirect(auth, googleProvider);
-    // This code below will only run if redirect fails and falls back to popup
+    // Use popup method directly since redirect has issues
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
   } catch (error: any) {
