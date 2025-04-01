@@ -11,6 +11,7 @@ import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
 import GroupChat from "@/pages/GroupChat";
 import Tasks from "@/pages/Tasks";
+import TaskDetails from "@/pages/TaskDetails";
 import Leaderboard from "@/pages/Leaderboard";
 import Profile from "@/pages/Profile";
 
@@ -54,6 +55,7 @@ function Router() {
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/chat/:groupId?" component={GroupChat} />
       <Route path="/tasks" component={Tasks} />
+      <Route path="/task/:taskId" component={TaskDetails} />
       <Route path="/leaderboard" component={Leaderboard} />
       <Route path="/profile" component={Profile} />
       <Route component={NotFound} />

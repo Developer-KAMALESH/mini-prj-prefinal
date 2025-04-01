@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Sidebar } from "@/components/ui/sidebar";
 import { MobileNav } from "@/components/ui/mobile-nav";
 import { ChatMessage } from "@/components/ui/chat-message";
+import { GroupSettings } from "@/components/ui/group-settings";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -13,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, ListChecks } from "lucide-react";
+import { Plus, ListChecks, Settings, Users } from "lucide-react";
 import 'remixicon/fonts/remixicon.css';
 
 export default function GroupChat() {
@@ -58,9 +59,33 @@ export default function GroupChat() {
             ...groupData
           });
           
-          // Check if the current user is the creator/admin of this group
+          // Check if the current user is the creator of this group
           if (groupData.creatorId === user.uid) {
             setIsGroupAdmin(true);
+          } else {
+            // Check if the user is an admin of this group
+            const checkAdmin = async () => {
+              try {
+                const membersQuery = query(
+                  collection(db, 'group_members'),
+                  where('groupId', '==', groupId),
+                  where('userId', '==', user.uid)
+                );
+                
+                const membersSnapshot = await getDocs(membersQuery);
+                
+                if (!membersSnapshot.empty) {
+                  const memberData = membersSnapshot.docs[0].data();
+                  if (memberData.isAdmin) {
+                    setIsGroupAdmin(true);
+                  }
+                }
+              } catch (err) {
+                console.error("Error checking admin status:", err);
+              }
+            };
+            
+            checkAdmin();
           }
         } else {
           setError("Group not found");
@@ -468,9 +493,33 @@ export default function GroupChat() {
                 <button className="text-neutral-dark hover:text-primary">
                   <i className="ri-search-line text-xl"></i>
                 </button>
-                <button className="text-neutral-dark hover:text-primary">
-                  <i className="ri-more-2-fill text-xl"></i>
-                </button>
+                {isGroupAdmin && group && (
+                  <GroupSettings
+                    groupId={groupId || ""}
+                    groupData={group}
+                    currentUserId={user.uid}
+                    onUpdate={() => {
+                      // Refresh data after updates
+                      const fetchGroup = async () => {
+                        try {
+                          const groupDoc = await getDoc(doc(db, 'groups', groupId));
+                          
+                          if (groupDoc.exists()) {
+                            const groupData = groupDoc.data();
+                            setGroup({
+                              id: groupDoc.id,
+                              ...groupData
+                            });
+                          }
+                        } catch (err) {
+                          console.error("Error refreshing group data:", err);
+                        }
+                      };
+                      
+                      fetchGroup();
+                    }}
+                  />
+                )}
               </div>
             </div>
           </header>
