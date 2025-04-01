@@ -12,7 +12,14 @@ import {
   updateProfile, 
   User 
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { 
+  getFirestore, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  collection,
+  serverTimestamp
+} from "firebase/firestore";
 
 // Firebase configuration
 const firebaseConfig = {
@@ -116,6 +123,44 @@ export const sendPasswordResetLink = async (email: string) => {
   }
 };
 
+// Save or update user in Firestore
+export const saveUserToFirestore = async (firebaseUser: User) => {
+  if (!firebaseUser) return null;
+  
+  try {
+    const userRef = doc(db, "users", firebaseUser.uid);
+    
+    // Check if the user document already exists
+    const userDoc = await getDoc(userRef);
+    
+    let userData: any = {
+      id: firebaseUser.uid,
+      name: firebaseUser.displayName || "User",
+      email: firebaseUser.email || "",
+      username: firebaseUser.email?.split('@')[0] || "user",
+      avatar: firebaseUser.photoURL || null,
+      lastLogin: serverTimestamp(),
+    };
+    
+    if (!userDoc.exists()) {
+      // Create a new user document if it doesn't exist
+      userData.createdAt = serverTimestamp();
+      console.log("Creating new user document in Firestore:", userData);
+    } else {
+      console.log("Updating existing user document in Firestore");
+    }
+    
+    // Save or update the user document
+    await setDoc(userRef, userData, { merge: true });
+    console.log("User saved to Firestore successfully");
+    
+    return userData;
+  } catch (error) {
+    console.error("Error saving user to Firestore:", error);
+    return null;
+  }
+};
+
 // Convert Firebase user to our app user format
 export const convertFirebaseUser = (firebaseUser: User) => {
   console.log("Converting Firebase user:", firebaseUser);
@@ -124,6 +169,11 @@ export const convertFirebaseUser = (firebaseUser: User) => {
     console.log("Null or undefined Firebase user object");
     return null;
   }
+  
+  // Trigger saving user to Firestore (don't await, we don't want to block UI)
+  saveUserToFirestore(firebaseUser).catch(error => 
+    console.error("Error in background Firestore save:", error)
+  );
   
   return {
     id: firebaseUser.uid,

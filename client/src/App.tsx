@@ -24,15 +24,19 @@ export type AppUser = {
   avatar?: string;
 } | null;
 
-type AuthContextType = {
+interface AuthContextType {
   user: AppUser;
   loading: boolean;
-};
+}
 
-export const AuthContext = createContext<AuthContextType>({
+// Create context without exporting the variable directly
+const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
 });
+
+// Export the context separately
+export { AuthContext };
 
 function Router() {
   const [location, setLocation] = useLocation();
@@ -43,6 +47,7 @@ function Router() {
     // For now, only redirect authenticated users from login page to dashboard
     if (!loading && user && (location.startsWith("/auth") || location === "/")) {
       setLocation("/dashboard");
+      return;
     }
     
     // Debug output

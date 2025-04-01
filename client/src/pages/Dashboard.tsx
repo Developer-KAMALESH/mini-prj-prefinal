@@ -16,7 +16,7 @@ import { insertGroupSchema } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { auth, logoutUser, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, getDocs, query, where, addDoc } from "firebase/firestore";
+import { collection, getDocs, query, where, addDoc, doc, getDoc } from "firebase/firestore";
 
 // Create group form schema
 const createGroupSchema = insertGroupSchema;
@@ -102,32 +102,71 @@ export default function Dashboard() {
         console.log("Admin groups:", adminGroups);
         
         // Get groups the user is a member of
+        // Note: We're going to filter out admin groups later when we combine them
         const membershipQuery = query(
           collection(db, 'group_members'),
           where('userId', '==', currentUser.id)
         );
         const membershipSnapshot = await getDocs(membershipQuery);
         
+        console.log("Member group count:", membershipSnapshot.docs.length);
+        
         // Fetch the actual group data for each membership
         const memberGroups = await Promise.all(
-          membershipSnapshot.docs.map(async (doc) => {
-            const groupId = doc.data().groupId;
-            const groupDoc = await db.collection('groups').doc(groupId).get();
-            if (groupDoc.exists) {
-              return {
-                id: groupId,
-                ...groupDoc.data(),
-                isAdmin: false
-              };
+          membershipSnapshot.docs.map(async (memberDoc) => {
+            try {
+              // Get the group ID from the membership document
+              const memberData = memberDoc.data();
+              const groupId = memberData.groupId;
+              
+              console.log("Fetching member group:", groupId);
+              
+              // Look up the group in Firestore
+              const groupDocRef = doc(db, 'groups', groupId);
+              const groupDoc = await getDoc(groupDocRef);
+              
+              if (groupDoc.exists()) {
+                const groupData = groupDoc.data();
+                return {
+                  id: groupId,
+                  name: groupData.name || 'Unnamed group',
+                  description: groupData.description || '',
+                  creatorId: groupData.creatorId,
+                  createdAt: groupData.createdAt || new Date().toISOString(),
+                  isAdmin: memberData.role === 'admin'
+                };
+              }
+              console.log("Group not found:", groupId);
+              return null;
+            } catch (error) {
+              console.error("Error fetching member group:", error);
+              return null;
             }
-            return null;
           })
         );
         
-        // Filter out any nulls and combine both arrays
-        const validMemberGroups = memberGroups.filter(g => g !== null);
-        const allGroups = [...adminGroups, ...validMemberGroups];
-        console.log("All groups:", allGroups);
+        // Filter out any nulls
+        const validMemberGroups = memberGroups.filter((g: any) => g !== null);
+        
+        // Combine groups but avoid duplicates by using a Map with group ID as key
+        const groupsMap = new Map();
+        
+        // Add admin groups first
+        adminGroups.forEach((group: any) => {
+          groupsMap.set(group.id, group);
+        });
+        
+        // Add member groups (will overwrite admin groups if same ID, but that's ok since isAdmin is true in both)
+        validMemberGroups.forEach((group: any) => {
+          // Only add if not already in map
+          if (!groupsMap.has(group.id)) {
+            groupsMap.set(group.id, group);
+          }
+        });
+        
+        // Convert map values back to array
+        const allGroups = Array.from(groupsMap.values());
+        console.log("All groups (deduplicated):", allGroups);
         
         setGroups(allGroups);
         setFilteredGroups(allGroups);
@@ -423,8 +462,11 @@ export default function Dashboard() {
               <div className="bg-white rounded-lg shadow-md p-6">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold">My Groups</h3>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/groups/discover">Find Groups</Link>
+                  <Button variant="outline" size="sm" onClick={() => toast({
+                    title: "Coming Soon",
+                    description: "Group discovery will be available in a future update!"
+                  })}>
+                    Find Groups
                   </Button>
                 </div>
                 {groupsLoading ? (
