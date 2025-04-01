@@ -39,6 +39,7 @@ export default function Dashboard() {
   const [authLoading, setAuthLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [groups, setGroups] = useState<any[]>([]);
+  const [filteredGroups, setFilteredGroups] = useState<any[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(true);
   
   // Setup form for creating a new group
@@ -111,15 +112,11 @@ export default function Dashboard() {
         const memberGroups = await Promise.all(
           membershipSnapshot.docs.map(async (doc) => {
             const groupId = doc.data().groupId;
-            const groupDoc = await getDocs(query(
-              collection(db, 'groups'),
-              where('id', '==', groupId)
-            ));
-            
-            if (groupDoc.docs.length > 0) {
+            const groupDoc = await db.collection('groups').doc(groupId).get();
+            if (groupDoc.exists) {
               return {
-                id: groupDoc.docs[0].id,
-                ...groupDoc.docs[0].data(),
+                id: groupId,
+                ...groupDoc.data(),
                 isAdmin: false
               };
             }
@@ -127,21 +124,22 @@ export default function Dashboard() {
           })
         );
         
-        console.log("Member groups:", memberGroups.filter(g => g !== null));
-        
-        // Combine admin groups and member groups, filtering out nulls
-        const allGroups = [...adminGroups, ...memberGroups.filter(g => g !== null)];
+        // Filter out any nulls and combine both arrays
+        const validMemberGroups = memberGroups.filter(g => g !== null);
+        const allGroups = [...adminGroups, ...validMemberGroups];
         console.log("All groups:", allGroups);
         
         setGroups(allGroups);
-        setGroupsLoading(false);
+        setFilteredGroups(allGroups);
+        
       } catch (error) {
         console.error("Error fetching groups:", error);
         toast({
           title: "Error",
-          description: "Failed to load groups. Please try again.",
-          variant: "destructive"
+          description: "Failed to load your groups. Please try again later.",
+          variant: "destructive",
         });
+      } finally {
         setGroupsLoading(false);
       }
     };
@@ -149,63 +147,47 @@ export default function Dashboard() {
     fetchGroups();
   }, [currentUser, toast]);
   
-  // Handle logout
-  const handleLogout = useCallback(async () => {
-    try {
-      await logoutUser();
-      toast({
-        title: "Logged out",
-        description: "You have been successfully logged out."
-      });
-      navigate('/auth');
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to logout. Please try again.",
-        variant: "destructive"
-      });
-    }
-  }, [toast, navigate]);
-  
-  // Create group mutation - using Firestore directly
   const handleCreateGroup = useCallback(async (data: CreateGroupFormValues) => {
     if (!currentUser) return;
     
     try {
-      // Add the group to Firestore
-      const groupRef = await addDoc(collection(db, 'groups'), {
-        name: data.name,
-        description: data.description,
+      // Add new group to Firestore
+      const groupData = {
+        ...data,
         creatorId: currentUser.id,
-        createdAt: new Date().toISOString()
-      });
+        creatorName: currentUser.name,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
       
-      // Add the creator as a member/admin
+      const docRef = await addDoc(collection(db, 'groups'), groupData);
+      
+      // Also add creator as a member
       await addDoc(collection(db, 'group_members'), {
-        groupId: groupRef.id,
         userId: currentUser.id,
-        role: 'admin',
-        joinedAt: new Date().toISOString()
+        groupId: docRef.id,
+        joinedAt: new Date().toISOString(),
+        role: 'admin'
       });
       
       toast({
-        title: "Success",
-        description: "Group created successfully!",
+        title: "Success!",
+        description: `Group "${data.name}" has been created.`,
       });
       
-      createGroupForm.reset();
-      
-      // Refresh groups
+      // Add to local state
       const newGroup = {
-        id: groupRef.id,
-        name: data.name,
-        description: data.description,
-        creatorId: currentUser.id,
-        createdAt: new Date().toISOString(),
+        id: docRef.id,
+        ...groupData,
         isAdmin: true
       };
       
-      setGroups(prevGroups => [...prevGroups, newGroup]);
+      setGroups(prev => [...prev, newGroup]);
+      setFilteredGroups(prev => [...prev, newGroup]);
+      
+      // Reset form and close dialog
+      createGroupForm.reset();
+      document.getElementById('close-create-group-dialog')?.click();
       
     } catch (error) {
       console.error("Error creating group:", error);
@@ -215,156 +197,191 @@ export default function Dashboard() {
         variant: "destructive",
       });
     }
-  }, [currentUser, toast, createGroupForm]);
+  }, [currentUser, createGroupForm, toast]);
   
-  // Loading state
+  // Handle form submission
+  const onCreateGroupSubmit = createGroupForm.handleSubmit(handleCreateGroup);
+  
+  // Handle logout
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+      navigate("/auth");
+    } catch (error) {
+      console.error("Error logging out:", error);
+      toast({
+        title: "Error",
+        description: "Failed to log out. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  // Show loading state while checking auth
   if (authLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
-        <p className="text-xl">Loading user data...</p>
+        <p>Loading...</p>
       </div>
     );
   }
   
-  // Not logged in state - we shouldn't hit this with the auth redirects in App.tsx
-  // but keeping it for safety
+  // Redirect to auth page if not logged in
   if (!currentUser) {
     return (
       <div className="h-screen flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">StudySync</h1>
-          <p className="mb-4">Please log in to access the dashboard</p>
-          <Button onClick={() => navigate('/auth')}>
-            Go to Login
-          </Button>
+          <h1 className="text-2xl font-semibold mb-4">Please Login</h1>
+          <p className="mb-4">You need to be logged in to view this page.</p>
+          <Button onClick={() => navigate("/auth")}>Go to Login</Button>
         </div>
       </div>
     );
   }
-
-  // Main dashboard UI when logged in
+  
   return (
     <div className="min-h-screen bg-neutral-light">
       <div className="flex h-screen overflow-hidden">
-        {/* Sidebar (Desktop) */}
+        {/* Sidebar */}
         <Sidebar 
+          activeItem="dashboard" 
           userName={currentUser.name}
           userEmail={currentUser.email}
           userAvatar={currentUser.avatar}
-          activeItem="dashboard"
         />
         
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Top Header */}
-          <header className="bg-white border-b border-gray-200 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <button 
-                  className="md:hidden text-neutral-dark mr-3"
-                  onClick={() => setShowMobileMenu(!showMobileMenu)}
-                >
-                  <i className="ri-menu-line text-2xl"></i>
-                </button>
-                <h1 className="text-xl font-semibold text-neutral-dark md:hidden">StudySync</h1>
-                <h1 className="text-xl font-semibold text-neutral-dark hidden md:block">Dashboard</h1>
-              </div>
-              <div className="flex items-center space-x-4">
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <button className="text-neutral-dark hover:text-primary">
-                      <i className="ri-notification-3-line text-xl"></i>
-                    </button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Notifications</DialogTitle>
-                    </DialogHeader>
-                    <div className="py-4 text-center text-gray-500">
-                      <p>No new notifications.</p>
+          {/* Header */}
+          <header className="bg-white border-b border-gray-200 py-4 px-6 flex items-center justify-between">
+            <div className="flex items-center">
+              <h1 className="text-xl font-semibold text-gray-800">Dashboard</h1>
+            </div>
+            
+            {/* User menu */}
+            <div className="flex items-center space-x-4">
+              <span className="text-sm font-medium hidden md:inline-block">
+                {currentUser.name}
+              </span>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                onClick={handleLogout}
+                title="Logout"
+              >
+                <LogOut className="h-5 w-5" />
+              </Button>
+              
+              {/* Create new group button (dialog trigger) */}
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button size="sm">Create Group</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create a New Study Group</DialogTitle>
+                  </DialogHeader>
+                  
+                  <form onSubmit={onCreateGroupSubmit} className="space-y-4 mt-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Group Name</Label>
+                      <Input
+                        id="name"
+                        placeholder="Enter group name"
+                        {...createGroupForm.register("name")}
+                      />
+                      {createGroupForm.formState.errors.name && (
+                        <div className="py-4 text-center text-gray-500">
+                          <p className="text-red-500 text-xs">
+                            {createGroupForm.formState.errors.name.message}
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  </DialogContent>
-                </Dialog>
-                <img 
-                  src={currentUser.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=80&q=80"} 
-                  alt="Profile" 
-                  className="h-8 w-8 rounded-full md:hidden" 
-                />
-              </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea
+                        id="description"
+                        placeholder="Enter group description"
+                        {...createGroupForm.register("description")}
+                      />
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        id="close-create-group-dialog"
+                        onClick={() => createGroupForm.reset()}
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={createGroupForm.formState.isSubmitting}>
+                        {createGroupForm.formState.isSubmitting ? "Creating..." : "Create Group"}
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </div>
           </header>
           
-          {/* Dashboard Content */}
-          <main className="flex-1 overflow-y-auto p-4 bg-neutral-light">
-            {/* Welcome Section */}
-            <Card className="mb-6">
-              <CardContent className="pt-6">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h2 className="text-xl font-semibold mb-2">Welcome back, {currentUser.name.split(" ")[0]}!</h2>
-                    <p className="text-neutral-dark/80">Here's what's happening with your study groups today.</p>
-                  </div>
-                  <Button variant="outline" onClick={handleLogout} className="hidden md:flex">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Logout
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Stats Grid */}
+          {/* Main Content */}
+          <main className="flex-1 overflow-y-auto p-6">
+            {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              {/* Stat Card 1 */}
+              {/* Total Groups */}
               <Card>
-                <CardContent className="pt-6">
+                <CardContent className="p-6">
                   <div className="flex items-center">
                     <div className="bg-primary/10 w-12 h-12 flex items-center justify-center rounded-full">
-                      <i className="ri-team-line text-xl text-primary"></i>
+                      <i className="ri-group-line text-xl text-primary"></i>
                     </div>
                     <div className="ml-4">
-                      <p className="text-sm text-neutral-dark/70">My Groups</p>
-                      <p className="text-2xl font-semibold">{groups.length || 0}</p>
+                      <p className="text-sm text-neutral-dark/70">Total Groups</p>
+                      <p className="text-2xl font-semibold">{groups.length}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-
-              {/* Stat Card 2 */}
+              
+              {/* Completed Tasks */}
               <Card>
-                <CardContent className="pt-6">
+                <CardContent className="p-6">
                   <div className="flex items-center">
                     <div className="bg-green-100 w-12 h-12 flex items-center justify-center rounded-full">
-                      <i className="ri-chat-3-line text-xl text-green-600"></i>
+                      <i className="ri-check-line text-xl text-green-600"></i>
                     </div>
                     <div className="ml-4">
-                      <p className="text-sm text-neutral-dark/70">Unread Messages</p>
-                      <p className="text-2xl font-semibold">0</p>
+                      <p className="text-sm text-neutral-dark/70">Completed Tasks</p>
+                      <p className="text-2xl font-semibold">-</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-
-              {/* Stat Card 3 */}
+              
+              {/* Pending Tasks */}
               <Card>
-                <CardContent className="pt-6">
+                <CardContent className="p-6">
                   <div className="flex items-center">
                     <div className="bg-yellow-100 w-12 h-12 flex items-center justify-center rounded-full">
-                      <i className="ri-task-line text-xl text-yellow-600"></i>
+                      <i className="ri-time-line text-xl text-yellow-600"></i>
                     </div>
                     <div className="ml-4">
                       <p className="text-sm text-neutral-dark/70">Pending Tasks</p>
-                      <p className="text-2xl font-semibold">0</p>
+                      <p className="text-2xl font-semibold">-</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-
-              {/* Stat Card 4 */}
+              
+              {/* Rank */}
               <Card>
-                <CardContent className="pt-6">
+                <CardContent className="p-6">
                   <div className="flex items-center">
                     <div className="bg-red-100 w-12 h-12 flex items-center justify-center rounded-full">
-                      <i className="ri-trophy-line text-xl text-red-500"></i>
+                      <i className="ri-medal-line text-xl text-red-600"></i>
                     </div>
                     <div className="ml-4">
                       <p className="text-sm text-neutral-dark/70">Your Rank</p>
@@ -374,7 +391,7 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
             </div>
-
+            
             {/* Recent Activity & Groups */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Recent Activity */}
@@ -401,74 +418,64 @@ export default function Dashboard() {
                   )}
                 </div>
               </div>
-
+              
               {/* My Groups */}
               <div className="bg-white rounded-lg shadow-md p-6">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold">My Groups</h3>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button size="sm" className="text-sm">
-                        <i className="ri-add-line mr-1"></i> New
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Create New Group</DialogTitle>
-                      </DialogHeader>
-                      <form onSubmit={createGroupForm.handleSubmit(handleCreateGroup)} className="space-y-4 mt-2">
-                        <div>
-                          <Label htmlFor="group-name">Group Name</Label>
-                          <Input 
-                            id="group-name" 
-                            {...createGroupForm.register("name")}
-                          />
-                          {createGroupForm.formState.errors.name && (
-                            <p className="text-red-500 text-sm mt-1">{createGroupForm.formState.errors.name.message}</p>
-                          )}
-                        </div>
-                        <div>
-                          <Label htmlFor="group-description">Description</Label>
-                          <Textarea 
-                            id="group-description" 
-                            {...createGroupForm.register("description")}
-                          />
-                          {createGroupForm.formState.errors.description && (
-                            <p className="text-red-500 text-sm mt-1">{createGroupForm.formState.errors.description.message}</p>
-                          )}
-                        </div>
-                        <Button 
-                          type="submit" 
-                          className="w-full"
-                        >
-                          Create Group
-                        </Button>
-                      </form>
-                    </DialogContent>
-                  </Dialog>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/groups/discover">Find Groups</Link>
+                  </Button>
                 </div>
-                
                 {groupsLoading ? (
                   <div className="text-center py-4">Loading groups...</div>
                 ) : groups.length > 0 ? (
-                  <div className="space-y-3">
-                    {groups.map((group) => (
-                      <Link key={group.id} href={`/chat/${group.id}`}>
-                        <div className="block p-3 rounded-lg hover:bg-neutral-light cursor-pointer">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0 bg-primary/80 rounded-full w-10 h-10 flex items-center justify-center text-white">
-                              <span className="font-semibold">{group.name.substring(0, 2).toUpperCase()}</span>
-                            </div>
-                            <div className="ml-3">
-                              <p className="font-medium">{group.name}</p>
-                              <p className="text-xs text-gray-500">
-                                {group.isAdmin ? "Admin" : "Member"} • Created {new Date(group.createdAt).toLocaleDateString()}
-                              </p>
+                  <div>
+                    <div className="mb-3 relative">
+                      <Input
+                        type="text"
+                        placeholder="Search groups..."
+                        className="w-full pl-9"
+                        onChange={(e) => {
+                          // Implement group filtering
+                          const searchTerm = e.target.value.toLowerCase();
+                          if (!searchTerm) {
+                            // Reset to show all groups if search is empty
+                            setFilteredGroups(groups);
+                          } else {
+                            // Filter groups by name or description
+                            const filtered = groups.filter(
+                              group => 
+                                group.name.toLowerCase().includes(searchTerm) || 
+                                (group.description && group.description.toLowerCase().includes(searchTerm))
+                            );
+                            setFilteredGroups(filtered);
+                          }
+                        }}
+                      />
+                      <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                        <i className="ri-search-line"></i>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      {filteredGroups.map((group) => (
+                        <Link key={group.id} href={`/chat/${group.id}`}>
+                          <div className="block p-3 rounded-lg hover:bg-neutral-light cursor-pointer">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 bg-primary/80 rounded-full w-10 h-10 flex items-center justify-center text-white">
+                                <span className="font-semibold">{group.name.substring(0, 2).toUpperCase()}</span>
+                              </div>
+                              <div className="ml-3">
+                                <p className="font-medium">{group.name}</p>
+                                <p className="text-xs text-gray-500">
+                                  {group.isAdmin ? "Admin" : "Member"} • Created {new Date(group.createdAt).toLocaleDateString()}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </Link>
-                    ))}
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
@@ -480,7 +487,7 @@ export default function Dashboard() {
           </main>
         </div>
       </div>
-
+      
       {/* Mobile Navigation */}
       <MobileNav activeItem="dashboard" />
     </div>

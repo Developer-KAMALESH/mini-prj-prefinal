@@ -47,7 +47,35 @@ function Router() {
     
     // Debug output
     console.log("Router checking auth state - Loading:", loading, "User:", user, "Location:", location);
+    
+    // Handle protected routes - redirect to login if not authenticated
+    const isProtectedRoute = [
+      "/dashboard", 
+      "/chat", 
+      "/tasks", 
+      "/task", 
+      "/leaderboard", 
+      "/flashcards", 
+      "/profile"
+    ].some(route => location.startsWith(route));
+    
+    if (!loading && !user && isProtectedRoute) {
+      console.log("Redirecting unauthenticated user to login");
+      setLocation("/auth");
+    }
   }, [user, loading, location, setLocation]);
+
+  // Render a loading state when auth is being determined
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">StudySync</h1>
+          <p className="text-gray-500">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Switch>

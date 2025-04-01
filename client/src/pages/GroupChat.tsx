@@ -39,6 +39,8 @@ export default function GroupChat() {
   const [group, setGroup] = useState<any>(null);
   const [members, setMembers] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
+  const [filteredMessages, setFilteredMessages] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isGroupAdmin, setIsGroupAdmin] = useState(false);
@@ -225,12 +227,24 @@ export default function GroupChat() {
     }
   }, [groupId, user]);
   
+  // Filter messages when search query changes or messages update
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredMessages(messages);
+    } else {
+      const filtered = messages.filter(msg => 
+        msg.content.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredMessages(filtered);
+    }
+  }, [messages, searchQuery]);
+
   // Scroll to bottom when new messages arrive
   useEffect(() => {
-    if (messagesEndRef.current) {
+    if (messagesEndRef.current && !searchQuery) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, [messages, searchQuery]);
   
   // State for task creation
   const [taskForm, setTaskForm] = useState({
@@ -490,9 +504,68 @@ export default function GroupChat() {
                     </DialogContent>
                   </Dialog>
                 )}
-                <button className="text-neutral-dark hover:text-primary">
-                  <i className="ri-search-line text-xl"></i>
-                </button>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <button className="text-neutral-dark hover:text-primary" title="Search messages">
+                      <i className="ri-search-line text-xl"></i>
+                    </button>
+                  </DialogTrigger>
+                  <button id="close-search-dialog" className="hidden"></button>
+                  <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                      <DialogTitle>Search Messages</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="search-message">Search for keywords</Label>
+                        <Input
+                          id="search-message"
+                          placeholder="Enter keywords to search"
+                          className="w-full"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex justify-between">
+                        <Button variant="outline" onClick={() => setSearchQuery("")}>Clear</Button>
+                        <Button onClick={() => document.getElementById('close-search-dialog')?.click()}>Done</Button>
+                      </div>
+                      <div className="mt-4 max-h-[300px] overflow-y-auto">
+                        {searchQuery ? (
+                          filteredMessages.length > 0 ? (
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium text-center mb-2">
+                                Found {filteredMessages.length} messages
+                              </p>
+                              {filteredMessages.slice(0, 5).map((msg) => (
+                                <div key={msg.id} className="p-2 rounded bg-neutral-light">
+                                  <p className="text-xs text-gray-500">
+                                    {msg.user?.name || "User"} • {new Date(msg.sentAt).toLocaleTimeString()}
+                                  </p>
+                                  <p className="text-sm">{msg.content}</p>
+                                </div>
+                              ))}
+                              {filteredMessages.length > 5 && (
+                                <p className="text-xs text-center text-gray-500">
+                                  And {filteredMessages.length - 5} more results
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500 text-center">
+                              No messages found matching "{searchQuery}"
+                            </p>
+                          )
+                        ) : (
+                          <p className="text-sm text-gray-500 text-center">
+                            Enter keywords to search messages
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                
                 {isGroupAdmin && group && (
                   <GroupSettings
                     groupId={groupId || ""}
@@ -502,7 +575,7 @@ export default function GroupChat() {
                       // Refresh data after updates
                       const fetchGroup = async () => {
                         try {
-                          const groupDoc = await getDoc(doc(db, 'groups', groupId));
+                          const groupDoc = await getDoc(doc(db, 'groups', groupId || ""));
                           
                           if (groupDoc.exists()) {
                             const groupData = groupDoc.data();
@@ -537,15 +610,23 @@ export default function GroupChat() {
               <div className="h-full flex items-center justify-center text-red-500">
                 Error: {error}
               </div>
-            ) : messages.length > 0 ? (
+            ) : filteredMessages.length > 0 ? (
               <div className="space-y-4">
+                {searchQuery && (
+                  <div className="flex items-center justify-center mb-2">
+                    <div className="bg-primary/20 px-3 py-1 rounded-full text-sm">
+                      Showing {filteredMessages.length} of {messages.length} messages matching: "{searchQuery}"
+                    </div>
+                  </div>
+                )}
+                
                 {/* Date Separator */}
                 <div className="flex items-center justify-center">
                   <div className="bg-gray-200 px-3 py-1 rounded-full text-xs text-gray-500">Today</div>
                 </div>
                 
                 {/* Messages */}
-                {messages.map((msg) => (
+                {filteredMessages.map((msg) => (
                   <ChatMessage
                     key={msg.id}
                     content={msg.content}
