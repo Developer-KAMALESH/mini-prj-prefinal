@@ -30,6 +30,31 @@ export default function Dashboard() {
   const { user: firebaseUser, loading: authLoading } = useAuth();
   const [, navigate] = useLocation();
   
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !firebaseUser) {
+      navigate('/auth');
+    }
+  }, [authLoading, firebaseUser, navigate]);
+
+  // If still loading auth or no user, show a loading screen
+  if (authLoading) {
+    return <div className="h-screen flex items-center justify-center">Loading authentication data...</div>;
+  }
+  
+  if (!firebaseUser) {
+    return null; // Will redirect in useEffect
+  }
+  
+  // Setup form for creating a new group
+  const createGroupForm = useForm<CreateGroupFormValues>({
+    resolver: zodResolver(createGroupSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+    },
+  });
+  
   // Handle logout
   const handleLogout = async () => {
     try {
@@ -58,15 +83,6 @@ export default function Dashboard() {
     queryKey: ['/api/groups'],
     enabled: !!userQuery.data,
   });
-
-  // Setup form for creating a new group
-  const createGroupForm = useForm<CreateGroupFormValues>({
-    resolver: zodResolver(createGroupSchema),
-    defaultValues: {
-      name: "",
-      description: "",
-    },
-  });
   
   // Create group mutation
   const createGroupMutation = useMutation({
@@ -93,24 +109,12 @@ export default function Dashboard() {
   const onCreateGroupSubmit = (data: CreateGroupFormValues) => {
     createGroupMutation.mutate(data);
   };
-  
-  // Loading states
-  if (authLoading) {
-    return <div className="h-screen flex items-center justify-center">Loading auth data...</div>;
-  }
-  
-  // Redirect to login if no Firebase user
-  useEffect(() => {
-    if (!authLoading && !firebaseUser) {
-      navigate('/auth');
-    }
-  }, [authLoading, firebaseUser, navigate]);
 
   // Use Firebase user data
   const user = {
-    name: firebaseUser?.name || "Guest", 
-    email: firebaseUser?.email || "guest@example.com",
-    avatar: firebaseUser?.avatar || null
+    name: firebaseUser.name || "Guest", 
+    email: firebaseUser.email || "guest@example.com",
+    avatar: firebaseUser.avatar || null
   };
   
   return (
