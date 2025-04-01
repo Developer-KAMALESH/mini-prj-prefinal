@@ -4,3 +4,7 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+# Local development files
+firebase.config.local.js
+.env.local
+.env
