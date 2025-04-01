@@ -107,37 +107,84 @@ export default function GroupChat() {
   useEffect(() => {
     if (!groupId || !user) return;
     
-    const messagesQuery = query(
-      collection(db, 'messages'),
-      where('groupId', '==', groupId),
-      orderBy('sentAt', 'asc')
-    );
-    
-    const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
-      try {
-        const messagesData = await Promise.all(
-          snapshot.docs.map(async (doc) => {
-            const messageData = doc.data();
-            const userDoc = await getDoc(doc(db, 'users', messageData.userId));
-            
-            return {
-              id: doc.id,
-              ...messageData,
-              user: userDoc.exists() ? { id: userDoc.id, ...userDoc.data() } : null
-            };
-          })
-        );
-        
-        setMessages(messagesData.filter(msg => msg.user !== null));
-      } catch (err: any) {
-        console.error("Error processing messages:", err);
-      }
-    }, (err) => {
-      console.error("Error subscribing to messages:", err);
-      setError("Failed to load messages");
-    });
-    
-    return () => unsubscribe();
+    // Create a composite index in Firestore to enable this query
+    // This handles the "failed-precondition" error
+    try {
+      // First, try to get messages without ordering to avoid composite index error
+      const messagesRef = collection(db, 'messages');
+      const messagesQuery = query(
+        messagesRef,
+        where('groupId', '==', groupId)
+      );
+      
+      const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
+        try {
+          // Process messages and sort them in JavaScript instead of Firestore query
+          const messagesData: any[] = [];
+          
+          for (const messageDoc of snapshot.docs) {
+            const messageData = messageDoc.data();
+            // Try to get user information if possible
+            try {
+              const userDocRef = doc(db, 'users', messageData.userId);
+              const userDocSnap = await getDoc(userDocRef);
+              
+              if (userDocSnap.exists()) {
+                messagesData.push({
+                  id: messageDoc.id,
+                  ...messageData,
+                  user: {
+                    id: userDocSnap.id,
+                    ...userDocSnap.data()
+                  }
+                });
+              } else {
+                // If user doesn't exist yet, use the current user's data
+                messagesData.push({
+                  id: messageDoc.id,
+                  ...messageData,
+                  user: {
+                    id: user.uid,
+                    name: user.displayName || user.email?.split('@')[0] || "User",
+                    email: user.email || "",
+                    avatar: user.photoURL
+                  }
+                });
+              }
+            } catch (userErr) {
+              console.error("Error fetching user for message:", userErr);
+              // Still add the message with minimal user info
+              messagesData.push({
+                id: messageDoc.id,
+                ...messageData,
+                user: {
+                  id: messageData.userId,
+                  name: "Unknown User",
+                  email: ""
+                }
+              });
+            }
+          }
+          
+          // Sort messages by sentAt
+          messagesData.sort((a, b) => {
+            return new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime();
+          });
+          
+          setMessages(messagesData);
+        } catch (err: any) {
+          console.error("Error processing messages:", err);
+        }
+      }, (err) => {
+        console.error("Error subscribing to messages:", err);
+        setError("Failed to load messages");
+      });
+      
+      return () => unsubscribe();
+    } catch (err) {
+      console.error("Failed to set up messages subscription:", err);
+      setError("Failed to subscribe to messages");
+    }
   }, [groupId, user]);
   
   // Scroll to bottom when new messages arrive

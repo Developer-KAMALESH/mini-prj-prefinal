@@ -12,6 +12,7 @@ import Dashboard from "@/pages/Dashboard";
 import GroupChat from "@/pages/GroupChat";
 import Tasks from "@/pages/Tasks";
 import Leaderboard from "@/pages/Leaderboard";
+import Profile from "@/pages/Profile";
 
 export type AppUser = {
   id: string;
@@ -54,6 +55,7 @@ function Router() {
       <Route path="/chat/:groupId?" component={GroupChat} />
       <Route path="/tasks" component={Tasks} />
       <Route path="/leaderboard" component={Leaderboard} />
+      <Route path="/profile" component={Profile} />
       <Route component={NotFound} />
     </Switch>
   );

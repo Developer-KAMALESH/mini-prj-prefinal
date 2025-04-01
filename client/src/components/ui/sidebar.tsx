@@ -121,6 +121,18 @@ export function Sidebar({ userName, userEmail, userAvatar, activeItem }: Sidebar
               </div>
             </Link>
           </li>
+          <li>
+            <Link href="/profile">
+              <div className={`flex items-center px-3 py-2 rounded-md cursor-pointer ${
+                activeItem === "settings" 
+                ? "bg-primary-light text-primary font-medium" 
+                : "text-gray-700 hover:text-primary hover:bg-primary-lighter"
+              }`}>
+                <Settings className="mr-3 h-5 w-5" />
+                Profile
+              </div>
+            </Link>
+          </li>
         </ul>
       </nav>
       
