@@ -12,7 +12,23 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { registerWithEmail, loginWithEmail, signInWithGoogle } from "@/lib/firebase";
+import { 
+  registerWithEmail, 
+  loginWithEmail, 
+  signInWithGoogle, 
+  sendPasswordResetLink, 
+  handleGoogleRedirect 
+} from "@/lib/firebase";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger,
+  DialogFooter,
+  DialogClose
+} from "@/components/ui/dialog";
 
 // Login form schema
 const loginSchema = z.object({
@@ -33,8 +49,16 @@ const registerSchema = insertUserSchema.extend({
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
+// Password reset schema
+const passwordResetSchema = z.object({
+  email: z.string().email("Invalid email address"),
+});
+
+type PasswordResetValues = z.infer<typeof passwordResetSchema>;
+
 export default function Auth() {
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
@@ -134,6 +158,38 @@ export default function Auth() {
     registerMutation.mutate(data);
   };
 
+  // Password reset form
+  const resetForm = useForm<PasswordResetValues>({
+    resolver: zodResolver(passwordResetSchema),
+    defaultValues: {
+      email: "",
+    },
+  });
+
+  // Password reset mutation
+  const resetPasswordMutation = useMutation({
+    mutationFn: (data: { email: string }) => sendPasswordResetLink(data.email),
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Password reset link has been sent to your email.",
+      });
+      setResetDialogOpen(false);
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send reset link. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Password reset submit handler
+  const onResetSubmit = (data: PasswordResetValues) => {
+    resetPasswordMutation.mutate({ email: data.email });
+  };
+
   return (
     <div className="min-h-screen bg-neutral-light">
       <div className="container mx-auto px-4 py-8 flex justify-center items-center min-h-screen">
@@ -205,12 +261,48 @@ export default function Auth() {
                       Remember me
                     </Label>
                   </div>
-                  <a
-                    href="#"
-                    className="text-sm text-primary hover:text-primary-dark"
-                  >
-                    Forgot password?
-                  </a>
+                  <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+                    <DialogTrigger asChild>
+                      <button type="button" className="text-sm text-primary hover:text-primary-dark">
+                        Forgot password?
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[425px]">
+                      <DialogHeader>
+                        <DialogTitle>Reset Password</DialogTitle>
+                        <DialogDescription>
+                          Enter your email address and we'll send you a link to reset your password.
+                        </DialogDescription>
+                      </DialogHeader>
+                      
+                      <form onSubmit={resetForm.handleSubmit(onResetSubmit)} className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="reset-email">Email Address</Label>
+                          <Input
+                            id="reset-email"
+                            type="email"
+                            placeholder="you@example.com"
+                            {...resetForm.register("email")}
+                          />
+                          {resetForm.formState.errors.email && (
+                            <p className="text-red-500 text-sm">
+                              {resetForm.formState.errors.email.message}
+                            </p>
+                          )}
+                        </div>
+                        
+                        <DialogFooter className="pt-4">
+                          <Button 
+                            type="submit" 
+                            disabled={resetPasswordMutation.isPending}
+                            className="w-full"
+                          >
+                            {resetPasswordMutation.isPending ? "Sending..." : "Send Reset Link"}
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
                 </div>
                 <Button
                   type="submit"

@@ -101,23 +101,37 @@ export async function checkProblemStatus(username: string, titleSlug: string) {
       throw new Error("Username and problem titleSlug are required");
     }
     
-    // Get combined user and problem data
+    // Get combined user and problem data - this fetches the problem status
     const { data } = await leetcodeClient.query({
       query: GET_USER_PROBLEM_STATUS,
       variables: { username, titleSlug },
+      fetchPolicy: 'network-only', // Don't use cache for verification
     });
 
-    // Get recent submissions to check if this problem has been solved
+    // Get recent submissions to verify this problem has been solved recently
     const { data: recentData } = await leetcodeClient.query({
       query: GET_RECENT_SUBMISSIONS,
       variables: { username, limit: 20 },
+      fetchPolicy: 'network-only', // Don't use cache for verification
     });
 
+    // Check if problem status from LeetCode indicates it's solved
+    const problemStatus = data.question?.status;
+    console.log("LeetCode problem status:", problemStatus);
+    
     // Check if the problem appears in recent accepted submissions
     const recentSubmissions = recentData.recentSubmissionList || [];
-    const problemSolved = recentSubmissions.some(
-      (submission: any) => submission.titleSlug === titleSlug && submission.statusDisplay === "Accepted"
-    );
+    console.log("Recent submissions:", recentSubmissions.length);
+    
+    // Strict checking: problem must be in "ac" (accepted) status AND appear in recent submissions
+    const problemSolved = problemStatus === "ac" && 
+      recentSubmissions.some(
+        (submission: any) => 
+          submission.titleSlug === titleSlug && 
+          submission.statusDisplay === "Accepted"
+      );
+
+    console.log("Problem solved:", problemSolved);
 
     return {
       problem: data.question,

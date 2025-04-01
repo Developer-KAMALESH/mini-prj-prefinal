@@ -3,7 +3,7 @@ import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
-import { auth, convertFirebaseUser } from "./lib/firebase";
+import { auth, convertFirebaseUser, handleGoogleRedirect } from "./lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/LandingPage";
@@ -66,6 +66,24 @@ function Router() {
 function App() {
   const [user, setUser] = useState<AppUser>(null);
   const [loading, setLoading] = useState(true);
+
+  // Handle Google redirect on app initialization
+  useEffect(() => {
+    const checkRedirect = async () => {
+      try {
+        // This will check if user comes from a redirect and handle the authentication
+        const redirectUser = await handleGoogleRedirect();
+        if (redirectUser) {
+          console.log("User authenticated via redirect:", redirectUser.email);
+          // Auth state listener will handle setting the user
+        }
+      } catch (error) {
+        console.error("Error handling redirect:", error);
+      }
+    };
+
+    checkRedirect();
+  }, []);
 
   // Listen for Firebase auth state changes
   useEffect(() => {

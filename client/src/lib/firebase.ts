@@ -1,5 +1,17 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile, User } from "firebase/auth";
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  sendPasswordResetEmail,
+  signOut, 
+  updateProfile, 
+  User 
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // Firebase configuration
@@ -22,6 +34,9 @@ export const googleProvider = new GoogleAuthProvider();
 // Authentication helper functions
 export const signInWithGoogle = async () => {
   try {
+    // Try redirect method first (more reliable for mobile)
+    await signInWithRedirect(auth, googleProvider);
+    // This code below will only run if redirect fails and falls back to popup
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
   } catch (error: any) {
@@ -32,6 +47,21 @@ export const signInWithGoogle = async () => {
       throw new Error("Please add this domain to your Firebase authorized domains list. Go to Firebase Console > Authentication > Settings > Authorized domains and add this domain.");
     }
     
+    throw error;
+  }
+};
+
+// Function to handle redirect result (call this on app initialization)
+export const handleGoogleRedirect = async () => {
+  try {
+    const result = await getRedirectResult(auth);
+    if (result) {
+      // User successfully signed in with redirect
+      return result.user;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error with redirect sign-in:", error);
     throw error;
   }
 };
@@ -69,6 +99,21 @@ export const logoutUser = async () => {
     await signOut(auth);
   } catch (error) {
     console.error("Error signing out:", error);
+    throw error;
+  }
+};
+
+// Password reset functionality
+export const sendPasswordResetLink = async (email: string) => {
+  try {
+    await sendPasswordResetEmail(auth, email);
+    return true;
+  } catch (error: any) {
+    console.error("Error sending password reset email:", error);
+    // Provide user-friendly error messages
+    if (error.code === "auth/user-not-found") {
+      throw new Error("No account found with this email address.");
+    }
     throw error;
   }
 };
