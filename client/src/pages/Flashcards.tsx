@@ -124,17 +124,18 @@ export default function Flashcards() {
         const groupsRef = collection(db, 'groups');
         
         for (const groupId of userGroupIds) {
-          const groupQuery = query(groupsRef, where('id', '==', groupId));
-          const groupSnapshot = await getDocs(groupQuery);
+          // We need to get the document directly by ID, not query by a field
+          const groupDocRef = doc(db, "groups", groupId);
+          const groupDoc = await getDoc(groupDocRef);
           
-          if (!groupSnapshot.empty) {
-            const groupDoc = groupSnapshot.docs[0];
+          if (groupDoc.exists()) {
+            const groupData = groupDoc.data();
             groupsData.push({
-              id: groupDoc.data().id,
-              name: groupDoc.data().name,
-              description: groupDoc.data().description,
-              createdAt: groupDoc.data().createdAt,
-              creatorId: groupDoc.data().creatorId,
+              id: groupId, // Use the actual document ID
+              name: groupData.name,
+              description: groupData.description,
+              createdAt: groupData.createdAt,
+              creatorId: groupData.creatorId,
             });
           }
         }
