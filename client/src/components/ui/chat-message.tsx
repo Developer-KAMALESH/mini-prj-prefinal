@@ -3,8 +3,8 @@ import { User } from "@shared/schema";
 type ChatMessageProps = {
   content: string;
   time: string;
-  user: User;
-  currentUserId: number;
+  user: User | any; // Support Firebase user format
+  currentUserId: string | number; // Support both Firebase UID (string) and database ID (number)
   isTaskNotification?: boolean;
 };
 
@@ -23,7 +23,7 @@ export function ChatMessage({ content, time, user, currentUserId, isTaskNotifica
         <div className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-lg shadow-sm text-sm text-center">
           <p className="font-medium">{content}</p>
           <p className="text-xs">
-            {time} • <a href="#" className="text-primary hover:underline">View Details</a>
+            {formatTime(time)} • <a href="/tasks" className="text-primary hover:underline">View Details</a>
           </p>
         </div>
       </div>

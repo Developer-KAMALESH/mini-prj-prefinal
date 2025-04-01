@@ -9,6 +9,12 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { auth, db } from "@/lib/firebase";
 import { collection, query, where, getDocs, doc, getDoc, addDoc, orderBy, onSnapshot } from "firebase/firestore";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, ListChecks } from "lucide-react";
+import 'remixicon/fonts/remixicon.css';
 
 export default function GroupChat() {
   const { groupId } = useParams();
@@ -34,6 +40,7 @@ export default function GroupChat() {
   const [messages, setMessages] = useState<any[]>([]);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isGroupAdmin, setIsGroupAdmin] = useState(false);
   
   // Fetch group data
   useEffect(() => {
@@ -45,10 +52,16 @@ export default function GroupChat() {
         const groupDoc = await getDoc(doc(db, 'groups', groupId));
         
         if (groupDoc.exists()) {
+          const groupData = groupDoc.data();
           setGroup({
             id: groupDoc.id,
-            ...groupDoc.data()
+            ...groupData
           });
+          
+          // Check if the current user is the creator/admin of this group
+          if (groupData.creatorId === user.uid) {
+            setIsGroupAdmin(true);
+          }
         } else {
           setError("Group not found");
         }
@@ -194,6 +207,97 @@ export default function GroupChat() {
     }
   }, [messages]);
   
+  // State for task creation
+  const [taskForm, setTaskForm] = useState({
+    title: "",
+    description: "",
+    type: "general",
+    resourceLink: ""
+  });
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+  
+  // Handle task form input changes
+  const handleTaskFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setTaskForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  // Handle task type selection
+  const handleTaskTypeChange = (value: string) => {
+    setTaskForm(prev => ({
+      ...prev,
+      type: value
+    }));
+  };
+  
+  // Handle task creation
+  const handleCreateTask = async () => {
+    if (!user || !groupId || isCreatingTask) return;
+    
+    try {
+      setIsCreatingTask(true);
+      
+      // Validate task form
+      if (!taskForm.title.trim()) {
+        toast({
+          title: "Error",
+          description: "Task title is required",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Create task in Firestore
+      const taskData = {
+        title: taskForm.title,
+        description: taskForm.description,
+        type: taskForm.type,
+        resourceLink: taskForm.resourceLink,
+        creatorId: user.uid,
+        groupId: groupId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      const taskRef = await addDoc(collection(db, 'tasks'), taskData);
+      
+      // Add a notification message to the chat
+      await addDoc(collection(db, 'messages'), {
+        content: `📋 New Task: ${taskForm.title}`,
+        userId: user.uid,
+        groupId: groupId,
+        sentAt: new Date().toISOString(),
+        isTaskNotification: true,
+        taskId: taskRef.id
+      });
+      
+      // Reset task form
+      setTaskForm({
+        title: "",
+        description: "",
+        type: "general",
+        resourceLink: ""
+      });
+      
+      toast({
+        title: "Success",
+        description: "Task created successfully",
+      });
+    } catch (err: any) {
+      console.error("Error creating task:", err);
+      toast({
+        title: "Error",
+        description: err.message || "Failed to create task. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingTask(false);
+    }
+  };
+  
   // Handle message sending
   const handleSendMessage = async () => {
     if (!message.trim() || sendingMessage || !user || !groupId) return;
@@ -287,6 +391,80 @@ export default function GroupChat() {
                 )}
               </div>
               <div className="flex items-center space-x-3">
+                {isGroupAdmin && (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <button className="text-neutral-dark hover:text-primary flex items-center">
+                        <ListChecks className="h-5 w-5 mr-1" />
+                        <span className="text-sm hidden md:inline">Create Task</span>
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Create New Task</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4 mt-2">
+                        <div>
+                          <Label htmlFor="task-title">Task Title</Label>
+                          <Input 
+                            id="task-title" 
+                            name="title"
+                            value={taskForm.title}
+                            onChange={handleTaskFormChange}
+                            placeholder="Enter task title"
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="task-description">Description</Label>
+                          <Textarea 
+                            id="task-description" 
+                            name="description"
+                            value={taskForm.description}
+                            onChange={handleTaskFormChange}
+                            placeholder="Enter task description"
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="task-type">Task Type</Label>
+                          <Select 
+                            onValueChange={handleTaskTypeChange}
+                            defaultValue={taskForm.type}
+                          >
+                            <SelectTrigger id="task-type">
+                              <SelectValue placeholder="Select task type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="general">General Task</SelectItem>
+                              <SelectItem value="leetcode">LeetCode Problem</SelectItem>
+                              <SelectItem value="form">Google Form</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="task-link">Resource Link (Optional)</Label>
+                          <Input 
+                            id="task-link" 
+                            name="resourceLink"
+                            value={taskForm.resourceLink}
+                            onChange={handleTaskFormChange}
+                            placeholder="https://" 
+                          />
+                        </div>
+                        
+                        <Button 
+                          className="w-full"
+                          onClick={handleCreateTask}
+                          disabled={isCreatingTask}
+                        >
+                          {isCreatingTask ? "Creating..." : "Create Task"}
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
                 <button className="text-neutral-dark hover:text-primary">
                   <i className="ri-search-line text-xl"></i>
                 </button>
@@ -325,6 +503,7 @@ export default function GroupChat() {
                     time={msg.sentAt}
                     user={msg.user}
                     currentUserId={user.uid}
+                    isTaskNotification={msg.isTaskNotification || false}
                   />
                 ))}
                 <div ref={messagesEndRef} />
