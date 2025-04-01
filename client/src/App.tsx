@@ -37,15 +37,13 @@ function Router() {
 
   // Handle authentication redirects
   useEffect(() => {
-    // Redirect unauthenticated users to auth page
-    if (!loading && !user && !location.startsWith("/auth") && location !== "/") {
-      setLocation("/auth");
-    }
-    
-    // Redirect authenticated users to dashboard if they're on auth page
+    // For now, only redirect authenticated users from login page to dashboard
     if (!loading && user && (location.startsWith("/auth") || location === "/")) {
       setLocation("/dashboard");
     }
+    
+    // Debug output
+    console.log("Router checking auth state - Loading:", loading, "User:", user, "Location:", location);
   }, [user, loading, location, setLocation]);
 
   return (
@@ -68,7 +66,9 @@ function App() {
   // Listen for Firebase auth state changes
   useEffect(() => {
     setLoading(true);
+    console.log("Setting up auth state listener");
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      console.log("Auth state changed:", firebaseUser ? "user logged in" : "user logged out");
       if (firebaseUser) {
         // User is signed in
         const appUser = convertFirebaseUser(firebaseUser);

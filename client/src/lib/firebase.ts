@@ -75,6 +75,13 @@ export const logoutUser = async () => {
 
 // Convert Firebase user to our app user format
 export const convertFirebaseUser = (firebaseUser: User) => {
+  console.log("Converting Firebase user:", firebaseUser);
+  
+  if (!firebaseUser) {
+    console.log("Null or undefined Firebase user object");
+    return null;
+  }
+  
   return {
     id: firebaseUser.uid,
     name: firebaseUser.displayName || "User",
