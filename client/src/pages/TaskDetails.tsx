@@ -210,7 +210,7 @@ export default function TaskDetails() {
         // Failed verification
         let errorMessage = "Could not verify LeetCode submission. Try solving the problem first.";
         
-        if (result && result.error) {
+        if (result && 'error' in result && result.error) {
           errorMessage = result.error;
         } else if (result && result.problem) {
           errorMessage = `Could not verify completion of "${result.problem?.title}". Make sure you've solved this problem recently on LeetCode.`;
@@ -248,8 +248,7 @@ export default function TaskDetails() {
         // Check status again after verification
         // Use type assertion to help TypeScript understand this comparison
         const currentStatus = leetCodeVerification.status;
-        const isNotSuccess = currentStatus !== "success";
-        if (isNotSuccess) {
+        if (currentStatus !== "success") {
           return; // Don't submit if verification failed (only proceed if "success")
         }
       }

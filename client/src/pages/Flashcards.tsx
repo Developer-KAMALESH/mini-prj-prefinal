@@ -34,7 +34,7 @@ type FlashcardCollection = {
   id: string;
   name: string;
   description: string;
-  groupId: number;
+  groupId: string;
   creatorId: string;
   creatorName: string;
   cardCount: number;
@@ -281,7 +281,7 @@ export default function Flashcards() {
       const newCollection = {
         name: data.name,
         description: data.description || '',
-        groupId: parseInt(data.groupId),
+        groupId: data.groupId,
         creatorId: user.id,
         creatorName: user.name,
         createdAt: now,

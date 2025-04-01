@@ -95,7 +95,7 @@ export default function Leaderboard() {
       
       // Get all task submissions for the group
       const tasksRef = collection(db, "tasks");
-      const taskQuery = query(tasksRef, where("groupId", "==", parseInt(groupId)));
+      const taskQuery = query(tasksRef, where("groupId", "==", groupId));
       const taskSnapshot = await getDocs(taskQuery);
       
       const taskIds = taskSnapshot.docs.map(doc => doc.data().id);
