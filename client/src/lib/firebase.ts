@@ -24,8 +24,14 @@ export const signInWithGoogle = async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error signing in with Google:", error);
+    
+    // Check for unauthorized domain error
+    if (error.code === "auth/unauthorized-domain") {
+      throw new Error("Please add this domain to your Firebase authorized domains list. Go to Firebase Console > Authentication > Settings > Authorized domains and add this domain.");
+    }
+    
     throw error;
   }
 };
@@ -36,8 +42,14 @@ export const registerWithEmail = async (email: string, password: string, name: s
     // Update the user's profile with their name
     await updateProfile(result.user, { displayName: name });
     return result.user;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error registering with email:", error);
+    
+    // Provide more user-friendly error messages
+    if (error.code === "auth/email-already-in-use") {
+      throw new Error("This email is already registered. Please try logging in instead.");
+    }
+    
     throw error;
   }
 };

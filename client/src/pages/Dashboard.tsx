@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { LogOut } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -98,11 +99,18 @@ export default function Dashboard() {
     return <div className="h-screen flex items-center justify-center">Loading auth data...</div>;
   }
   
-  // Use Firebase user data if available
-  const user = firebaseUser || { 
-    name: "Guest", 
-    email: "guest@example.com",
-    avatar: null
+  // Redirect to login if no Firebase user
+  useEffect(() => {
+    if (!authLoading && !firebaseUser) {
+      navigate('/auth');
+    }
+  }, [authLoading, firebaseUser, navigate]);
+
+  // Use Firebase user data
+  const user = {
+    name: firebaseUser?.name || "Guest", 
+    email: firebaseUser?.email || "guest@example.com",
+    avatar: firebaseUser?.avatar || null
   };
   
   return (
@@ -149,8 +157,16 @@ export default function Dashboard() {
             {/* Welcome Section */}
             <Card className="mb-6">
               <CardContent className="pt-6">
-                <h2 className="text-xl font-semibold mb-2">Welcome back, {user.name.split(" ")[0]}!</h2>
-                <p className="text-neutral-dark/80">Here's what's happening with your study groups today.</p>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-xl font-semibold mb-2">Welcome back, {user.name.split(" ")[0]}!</h2>
+                    <p className="text-neutral-dark/80">Here's what's happening with your study groups today.</p>
+                  </div>
+                  <Button variant="outline" onClick={handleLogout} className="hidden md:flex">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Logout
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 
