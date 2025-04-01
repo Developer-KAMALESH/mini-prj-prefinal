@@ -44,7 +44,7 @@ export function Sidebar({ userName, userEmail, userAvatar, activeItem }: Sidebar
   };
   
   return (
-    <aside className="hidden md:flex w-64 flex-col bg-white border-r border-gray-200">
+    <aside className="hidden md:flex md:flex-shrink-0 w-64 flex-col h-screen sticky top-0 bg-white border-r border-gray-200">
       {/* Logo and Profile */}
       <div className="p-4 border-b border-gray-200">
         <Link href="/dashboard">

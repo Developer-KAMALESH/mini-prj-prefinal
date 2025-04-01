@@ -32,44 +32,69 @@ export default function Leaderboard() {
     const fetchGroups = async () => {
       try {
         setLoading(true);
+        console.log("Fetching groups for user:", user.id);
+        
+        // Get all groups where user is a member
         const groupMembersRef = collection(db, "group_members");
         const q = query(groupMembersRef, where("userId", "==", user.id));
         const querySnapshot = await getDocs(q);
         
-        const userGroupIds = querySnapshot.docs.map(doc => doc.data().groupId);
+        console.log(`Found ${querySnapshot.size} group memberships`);
+        
+        // Extract group IDs from the memberships
+        const userGroupIds = querySnapshot.docs.map(docSnapshot => {
+          const data = docSnapshot.data();
+          console.log("Group member data:", data);
+          return data.groupId;
+        });
         
         if (userGroupIds.length === 0) {
+          console.log("User is not a member of any groups");
           setGroups([]);
           setLoading(false);
           return;
         }
         
-        const groupsRef = collection(db, "groups");
+        console.log("User's group IDs:", userGroupIds);
+        
+        // Fetch each group document by ID
         const groupsData: any[] = [];
         
         for (const groupId of userGroupIds) {
-          // We need to get the document directly by ID, not query by a field
-          const groupDocRef = doc(db, "groups", groupId);
-          const groupDoc = await getDoc(groupDocRef);
-          
-          if (groupDoc.exists()) {
-            const groupData = groupDoc.data();
-            groupsData.push({
-              id: groupId, // Use the actual document ID
-              name: groupData.name,
-              description: groupData.description,
-              createdAt: groupData.createdAt,
-              creatorId: groupData.creatorId
-            });
+          try {
+            console.log(`Fetching group with ID: ${groupId}`);
+            
+            // Get the group document by ID
+            const groupDocRef = doc(db, "groups", groupId);
+            const groupDoc = await getDoc(groupDocRef);
+            
+            if (groupDoc.exists()) {
+              const groupData = groupDoc.data();
+              console.log("Retrieved group data:", { id: groupId, ...groupData });
+              
+              groupsData.push({
+                id: groupId, // Use the document ID
+                name: groupData.name,
+                description: groupData.description,
+                createdAt: groupData.createdAt,
+                creatorId: groupData.creatorId
+              });
+            } else {
+              console.log(`Group document with ID ${groupId} does not exist`);
+            }
+          } catch (err) {
+            console.error(`Error fetching group with ID ${groupId}:`, err);
           }
         }
         
+        console.log(`Successfully retrieved ${groupsData.length} groups`);
         setGroups(groupsData);
         
         // Auto-select first group if available
         if (groupsData.length > 0 && !selectedGroupId) {
-          setSelectedGroupId(groupsData[0].id.toString());
-          fetchLeaderboardData(groupsData[0].id.toString(), timeframe);
+          console.log(`Auto-selecting first group: ${groupsData[0].id}`);
+          setSelectedGroupId(groupsData[0].id);
+          fetchLeaderboardData(groupsData[0].id, timeframe);
         }
         
       } catch (error) {
@@ -85,7 +110,7 @@ export default function Leaderboard() {
     };
     
     fetchGroups();
-  }, [user, toast]);
+  }, [user, toast, timeframe]);
   
   // Fetch leaderboard data when group is selected
   const fetchLeaderboardData = async (groupId: string, timeframeFilter: string) => {

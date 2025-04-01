@@ -182,22 +182,46 @@ export async function checkProblemStatus(username: string, titleSlug: string) {
 export async function verifyLeetCodeCompletion(username: string, problemTitleSlug: string) {
   try {
     if (!username || !problemTitleSlug) {
+      console.error("Missing required parameters for LeetCode verification:", { username, problemTitleSlug });
       return { 
         verified: false, 
         error: "Missing username or problem identifier" 
       };
     }
     
-    console.log(`Verifying LeetCode completion for user ${username} and problem ${problemTitleSlug}`);
+    // Validate that username is a non-empty string with basic validation
+    if (typeof username !== 'string' || username.trim() === '') {
+      console.error("Invalid LeetCode username format:", username);
+      return {
+        verified: false,
+        error: "Invalid LeetCode username format"
+      };
+    }
     
-    const result = await checkProblemStatus(username, problemTitleSlug);
+    // Trim any whitespace from the username
+    const sanitizedUsername = username.trim();
+    
+    console.log(`Verifying LeetCode completion for user ${sanitizedUsername} and problem ${problemTitleSlug}`);
+    
+    const result = await checkProblemStatus(sanitizedUsername, problemTitleSlug);
     
     // If result has an error field, there was a problem with verification
     if ('error' in result) {
+      console.error("LeetCode verification error:", result.error);
       return { 
         verified: false, 
         error: result.error,
         problem: null
+      };
+    }
+    
+    // Additional validation to ensure user data was returned
+    if (!result.user || !result.user.username) {
+      console.error("LeetCode API returned no user data");
+      return {
+        verified: false,
+        error: "LeetCode user not found",
+        problem: result.problem || null
       };
     }
     
@@ -212,7 +236,7 @@ export async function verifyLeetCodeCompletion(username: string, problemTitleSlu
         isPaidOnly: result.problem?.isPaidOnly
       },
       user: {
-        username: result.user?.username
+        username: result.user.username
       },
       // Include only the successful submissions
       submissions: result.recentSubmissions
