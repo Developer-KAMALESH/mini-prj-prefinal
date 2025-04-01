@@ -1,15 +1,14 @@
 import { useState, useRef, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { z } from "zod";
 import { Sidebar } from "@/components/ui/sidebar";
 import { MobileNav } from "@/components/ui/mobile-nav";
 import { ChatMessage } from "@/components/ui/chat-message";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { insertMessageSchema } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { auth, db } from "@/lib/firebase";
+import { collection, query, where, getDocs, doc, getDoc, addDoc, orderBy, onSnapshot } from "firebase/firestore";
 
 export default function GroupChat() {
   const { groupId } = useParams();
@@ -17,59 +16,161 @@ export default function GroupChat() {
   const { toast } = useToast();
   const [message, setMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Use the current auth.currentUser directly
+  const [user, setUser] = useState(auth.currentUser);
   
-  // Get current user
-  const userQuery = useQuery({
-    queryKey: ['/api/auth/me'],
-  });
+  // Keep track of the current Firebase user
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((firebaseUser) => {
+      setUser(firebaseUser);
+    });
+    return () => unsubscribe();
+  }, []);
   
-  // Get selected group
-  const groupQuery = useQuery({
-    queryKey: [`/api/groups/${groupId}`],
-    enabled: !!groupId && !!userQuery.data,
-  });
+  // State for Firestore data
+  const [isLoading, setIsLoading] = useState(true);
+  const [group, setGroup] = useState<any>(null);
+  const [members, setMembers] = useState<any[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
-  // Get group members
-  const membersQuery = useQuery({
-    queryKey: [`/api/groups/${groupId}/members`],
-    enabled: !!groupId && !!userQuery.data,
-  });
+  // Fetch group data
+  useEffect(() => {
+    if (!groupId || !user) return;
+    
+    const fetchGroup = async () => {
+      try {
+        setIsLoading(true);
+        const groupDoc = await getDoc(doc(db, 'groups', groupId));
+        
+        if (groupDoc.exists()) {
+          setGroup({
+            id: groupDoc.id,
+            ...groupDoc.data()
+          });
+        } else {
+          setError("Group not found");
+        }
+      } catch (err: any) {
+        console.error("Error fetching group:", err);
+        setError(err.message || "Failed to load group data");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchGroup();
+  }, [groupId, user]);
   
-  // Get messages
-  const messagesQuery = useQuery({
-    queryKey: [`/api/groups/${groupId}/messages`],
-    enabled: !!groupId && !!userQuery.data,
-    refetchInterval: 5000, // Poll for new messages every 5 seconds
-  });
+  // Fetch group members
+  useEffect(() => {
+    if (!groupId || !user) return;
+    
+    const fetchMembers = async () => {
+      try {
+        const membersQuery = query(
+          collection(db, 'group_members'),
+          where('groupId', '==', groupId)
+        );
+        
+        const membersSnapshot = await getDocs(membersQuery);
+        const membersData: any[] = [];
+        
+        for (const memberDoc of membersSnapshot.docs) {
+          const memberData = memberDoc.data();
+          const userDocRef = doc(db, 'users', memberData.userId);
+          const userDocSnap = await getDoc(userDocRef);
+          
+          if (userDocSnap.exists()) {
+            membersData.push({
+              id: memberDoc.id,
+              ...memberData,
+              user: {
+                id: userDocSnap.id,
+                ...userDocSnap.data()
+              }
+            });
+          }
+        }
+        
+        setMembers(membersData);
+      } catch (err: any) {
+        console.error("Error fetching members:", err);
+      }
+    };
+    
+    fetchMembers();
+  }, [groupId, user]);
   
-  // Send message mutation
-  const sendMessageMutation = useMutation({
-    mutationFn: (content: string) => 
-      apiRequest("POST", `/api/groups/${groupId}/messages`, { content }),
-    onSuccess: () => {
-      setMessage("");
-      queryClient.invalidateQueries({ queryKey: [`/api/groups/${groupId}/messages`] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send message. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
+  // Subscribe to messages
+  useEffect(() => {
+    if (!groupId || !user) return;
+    
+    const messagesQuery = query(
+      collection(db, 'messages'),
+      where('groupId', '==', groupId),
+      orderBy('sentAt', 'asc')
+    );
+    
+    const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
+      try {
+        const messagesData = await Promise.all(
+          snapshot.docs.map(async (doc) => {
+            const messageData = doc.data();
+            const userDoc = await getDoc(doc(db, 'users', messageData.userId));
+            
+            return {
+              id: doc.id,
+              ...messageData,
+              user: userDoc.exists() ? { id: userDoc.id, ...userDoc.data() } : null
+            };
+          })
+        );
+        
+        setMessages(messagesData.filter(msg => msg.user !== null));
+      } catch (err: any) {
+        console.error("Error processing messages:", err);
+      }
+    }, (err) => {
+      console.error("Error subscribing to messages:", err);
+      setError("Failed to load messages");
+    });
+    
+    return () => unsubscribe();
+  }, [groupId, user]);
   
   // Scroll to bottom when new messages arrive
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messagesQuery.data]);
+  }, [messages]);
   
   // Handle message sending
-  const handleSendMessage = () => {
-    if (message.trim() && !sendMessageMutation.isPending) {
-      sendMessageMutation.mutate(message);
+  const handleSendMessage = async () => {
+    if (!message.trim() || sendingMessage || !user || !groupId) return;
+    
+    try {
+      setSendingMessage(true);
+      
+      await addDoc(collection(db, 'messages'), {
+        content: message,
+        userId: user.uid,
+        groupId: groupId,
+        sentAt: new Date().toISOString()
+      });
+      
+      setMessage("");
+    } catch (err: any) {
+      console.error("Error sending message:", err);
+      toast({
+        title: "Error",
+        description: err.message || "Failed to send message. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSendingMessage(false);
     }
   };
   
@@ -81,78 +182,32 @@ export default function GroupChat() {
     }
   };
   
-  // Loading states
-  if (userQuery.isLoading) {
-    return <div className="h-screen flex items-center justify-center">Loading user data...</div>;
+  // Loading state
+  if (!user) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">StudyConnect</h1>
+          <p className="mb-4">Please log in to access the chat</p>
+          <Button onClick={() => navigate('/auth')}>
+            Go to Login
+          </Button>
+        </div>
+      </div>
+    );
   }
   
-  if (userQuery.error) {
-    return <div className="h-screen flex items-center justify-center">Error: {userQuery.error.message}</div>;
-  }
-  
-  const user = userQuery.data;
-  const group = groupQuery.data;
-  
+  // Main chat UI
   return (
     <div className="min-h-screen bg-neutral-light">
       <div className="flex h-screen overflow-hidden">
-        {/* Chat Sidebar (Desktop) */}
-        <aside className="hidden md:flex w-72 flex-col bg-white border-r border-gray-200">
-          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-            <h1 className="text-xl font-semibold text-neutral-dark">Chats</h1>
-            <button className="text-neutral-dark hover:text-primary">
-              <i className="ri-edit-line text-xl"></i>
-            </button>
-          </div>
-          
-          <div className="px-3 py-3 border-b border-gray-200">
-            <input 
-              type="text" 
-              placeholder="Search chats..." 
-              className="w-full px-3 py-2 bg-neutral-light rounded-lg text-sm"
-            />
-          </div>
-          
-          <div className="flex-1 overflow-y-auto">
-            {/* Chat List */}
-            {userQuery.data && (
-              <div className="p-2">
-                {groupQuery.isLoading ? (
-                  <div className="p-3 text-center">Loading groups...</div>
-                ) : groupQuery.error ? (
-                  <div className="p-3 text-center text-red-500">Error loading groups</div>
-                ) : (
-                  <>
-                    {/* Display group here */}
-                    <a href="#" className="flex items-center p-3 bg-primary/10 rounded-lg mb-1">
-                      <div className="flex-shrink-0 bg-primary rounded-full w-10 h-10 flex items-center justify-center text-white">
-                        <span className="font-semibold">{group?.name.substring(0, 2).toUpperCase()}</span>
-                      </div>
-                      <div className="ml-3 flex-1">
-                        <div className="flex justify-between">
-                          <p className="font-medium text-primary">{group?.name}</p>
-                          <p className="text-xs text-primary">Now</p>
-                        </div>
-                        <p className="text-xs text-neutral-dark truncate">
-                          {membersQuery.data?.length || 0} members
-                        </p>
-                      </div>
-                    </a>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-          
-          <div className="p-4 border-t border-gray-200">
-            <button 
-              className="flex items-center text-primary hover:text-primary-dark"
-              onClick={() => navigate("/dashboard")}
-            >
-              <i className="ri-dashboard-line mr-2"></i> Back to Dashboard
-            </button>
-          </div>
-        </aside>
+        {/* Desktop Sidebar */}
+        <Sidebar 
+          userName={user.displayName || user.email?.split('@')[0] || "User"} 
+          userEmail={user.email || ""} 
+          userAvatar={user.photoURL || null} 
+          activeItem="chat" 
+        />
 
         {/* Chat Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -166,15 +221,23 @@ export default function GroupChat() {
                 >
                   <i className="ri-arrow-left-line text-2xl"></i>
                 </button>
-                <div className="flex-shrink-0 bg-primary rounded-full w-10 h-10 flex items-center justify-center text-white">
-                  <span className="font-semibold">{group?.name.substring(0, 2).toUpperCase()}</span>
-                </div>
-                <div className="ml-3">
-                  <p className="font-semibold">{group?.name}</p>
-                  <p className="text-xs text-gray-500">
-                    {membersQuery.data?.length || 0} members • {membersQuery.data ? membersQuery.data.filter((m: any) => m.user.id !== user.id).length : 0} others
-                  </p>
-                </div>
+                {group ? (
+                  <>
+                    <div className="flex-shrink-0 bg-primary rounded-full w-10 h-10 flex items-center justify-center text-white">
+                      <span className="font-semibold">{group.name.substring(0, 2).toUpperCase()}</span>
+                    </div>
+                    <div className="ml-3">
+                      <p className="font-semibold">{group.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {members.length} members • {members.filter(m => m.userId !== user.uid).length} others
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="ml-3">
+                    <p className="font-semibold">Loading...</p>
+                  </div>
+                )}
               </div>
               <div className="flex items-center space-x-3">
                 <button className="text-neutral-dark hover:text-primary">
@@ -192,15 +255,15 @@ export default function GroupChat() {
             className="flex-1 overflow-y-auto p-4 bg-neutral-light/50 scrollbar-hide"
             style={{ scrollbarWidth: 'none' }}
           >
-            {messagesQuery.isLoading ? (
+            {isLoading ? (
               <div className="h-full flex items-center justify-center">
                 Loading messages...
               </div>
-            ) : messagesQuery.error ? (
+            ) : error ? (
               <div className="h-full flex items-center justify-center text-red-500">
-                Error loading messages: {messagesQuery.error.message}
+                Error: {error}
               </div>
-            ) : messagesQuery.data && messagesQuery.data.length > 0 ? (
+            ) : messages.length > 0 ? (
               <div className="space-y-4">
                 {/* Date Separator */}
                 <div className="flex items-center justify-center">
@@ -208,13 +271,13 @@ export default function GroupChat() {
                 </div>
                 
                 {/* Messages */}
-                {messagesQuery.data.map((msg: any) => (
+                {messages.map((msg) => (
                   <ChatMessage
                     key={msg.id}
                     content={msg.content}
                     time={msg.sentAt}
                     user={msg.user}
-                    currentUserId={user.id}
+                    currentUserId={user.uid}
                   />
                 ))}
                 <div ref={messagesEndRef} />
@@ -244,7 +307,7 @@ export default function GroupChat() {
               <Button 
                 className="bg-primary hover:bg-primary-dark text-white p-3 rounded-full h-12 w-12 flex items-center justify-center"
                 onClick={handleSendMessage}
-                disabled={!message.trim() || sendMessageMutation.isPending}
+                disabled={!message.trim() || sendingMessage}
                 aria-label="Send message"
               >
                 <i className="ri-send-plane-fill"></i>
@@ -255,7 +318,7 @@ export default function GroupChat() {
       </div>
 
       {/* Mobile Navigation */}
-      <MobileNav activeItem="chats" />
+      <MobileNav activeItem="chat" />
     </div>
   );
 }
