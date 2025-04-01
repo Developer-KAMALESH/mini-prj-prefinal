@@ -47,9 +47,9 @@ export function Sidebar({ userName, userEmail, userAvatar, activeItem }: Sidebar
       {/* Logo and Profile */}
       <div className="p-4 border-b border-gray-200">
         <Link href="/dashboard">
-          <a className="flex items-center">
+          <div className="flex items-center cursor-pointer">
             <h1 className="text-xl font-bold text-primary">StudyConnect</h1>
-          </a>
+          </div>
         </Link>
       </div>
       
@@ -75,50 +75,50 @@ export function Sidebar({ userName, userEmail, userAvatar, activeItem }: Sidebar
         <ul className="space-y-1">
           <li>
             <Link href="/dashboard">
-              <a className={`flex items-center px-3 py-2 rounded-md ${
+              <div className={`flex items-center px-3 py-2 rounded-md cursor-pointer ${
                 activeItem === "dashboard" 
                 ? "bg-primary-light text-primary font-medium" 
                 : "text-gray-700 hover:text-primary hover:bg-primary-lighter"
               }`}>
                 <LayoutDashboard className="mr-3 h-5 w-5" />
                 Dashboard
-              </a>
+              </div>
             </Link>
           </li>
           <li>
             <Link href="/chat">
-              <a className={`flex items-center px-3 py-2 rounded-md ${
+              <div className={`flex items-center px-3 py-2 rounded-md cursor-pointer ${
                 activeItem === "chat" 
                 ? "bg-primary-light text-primary font-medium" 
                 : "text-gray-700 hover:text-primary hover:bg-primary-lighter"
               }`}>
                 <MessageSquare className="mr-3 h-5 w-5" />
                 Chat
-              </a>
+              </div>
             </Link>
           </li>
           <li>
             <Link href="/tasks">
-              <a className={`flex items-center px-3 py-2 rounded-md ${
+              <div className={`flex items-center px-3 py-2 rounded-md cursor-pointer ${
                 activeItem === "tasks" 
                 ? "bg-primary-light text-primary font-medium" 
                 : "text-gray-700 hover:text-primary hover:bg-primary-lighter"
               }`}>
                 <CheckSquare className="mr-3 h-5 w-5" />
                 Tasks
-              </a>
+              </div>
             </Link>
           </li>
           <li>
             <Link href="/leaderboard">
-              <a className={`flex items-center px-3 py-2 rounded-md ${
+              <div className={`flex items-center px-3 py-2 rounded-md cursor-pointer ${
                 activeItem === "leaderboard" 
                 ? "bg-primary-light text-primary font-medium" 
                 : "text-gray-700 hover:text-primary hover:bg-primary-lighter"
               }`}>
                 <Trophy className="mr-3 h-5 w-5" />
                 Leaderboard
-              </a>
+              </div>
             </Link>
           </li>
         </ul>
