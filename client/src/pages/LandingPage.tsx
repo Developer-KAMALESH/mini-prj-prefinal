@@ -4,24 +4,28 @@ import { Button } from "@/components/ui/button";
 // Team member data
 const teamMembers = [
   {
-    name: "Alex Johnson",
-    role: "Frontend Developer",
-    image: "https://images.unsplash.com/photo-1557862921-37829c790f19?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=500&q=80",
+    name: "HEMANATH M",
+    role: "211422244067",
+    image: "https://i.ibb.co/5gNyHvTP/hm.jpg",
+    linkedin: "https://www.linkedin.com/in/hemanath-m-611aa6246/",
   },
   {
-    name: "Mia Williams",
-    role: "Backend Developer",
-    image: "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=500&q=80",
+    name: "JOSEPH PAUL MAMMEN",
+    role: "211422244085",
+    image: "https://i.ibb.co/gbz6BBNC/jpm.jpg",
+    linkedin: "https://www.linkedin.com/in/joseph-paul-mammen-b818aa253/",
   },
   {
-    name: "David Chen",
-    role: "UI/UX Designer",
-    image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=500&q=80",
+    name: "DONSON MICHEL THAMBE J",
+    role: "211422244044",
+    image: "https://i.ibb.co/ycqNyxrP/dmt.jpg",
+    linkedin: "https://www.linkedin.com/in/donsen-michel-thambe-26829025b/",
   },
   {
-    name: "Sarah Martinez",
-    role: "Project Manager",
-    image: "https://images.unsplash.com/photo-1534751516642-a1af1ef26a56?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=500&q=80",
+    name: "KAMALESH S",
+    role: "211422244089",
+    image: "https://i.ibb.co/zWfNxzbR/ks.jpg",
+    linkedin: "https://www.linkedin.com/in/kamalesh-techie/",
   }
 ];
 
@@ -156,8 +160,7 @@ export default function LandingPage() {
                 <h3 className="text-xl font-semibold mb-1">{member.name}</h3>
                 <p className="text-neutral-dark/70 mb-3">{member.role}</p>
                 <div className="flex justify-center space-x-3">
-                  <a href="#" className="text-neutral-dark hover:text-primary"><i className="ri-github-fill text-xl"></i></a>
-                  <a href="#" className="text-neutral-dark hover:text-primary"><i className="ri-linkedin-box-fill text-xl"></i></a>
+                  <a href={member.linkedin} className="text-neutral-dark hover:text-primary"><i className="ri-linkedin-box-fill text-xl"></i></a>
                 </div>
               </div>
             ))}
